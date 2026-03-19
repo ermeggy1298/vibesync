@@ -1,0 +1,153 @@
+{
+  "name": "vibesync",
+  "displayName": "VibeSync",
+  "description": "AI-aware file coordination for vibe coding teams — by AReS-BI",
+  "version": "1.0.0",
+  "publisher": "aresbi",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/AReS-BI/vibesync"
+  },
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "main": "./out/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "vibesync.showQueue",
+        "title": "%cmd.showQueue%"
+      },
+      {
+        "command": "vibesync.release",
+        "title": "%cmd.release%"
+      },
+      {
+        "command": "vibesync.forceUnlock",
+        "title": "%cmd.forceUnlock%"
+      },
+      {
+        "command": "vibesync.fetchNow",
+        "title": "%cmd.fetchNow%"
+      },
+      {
+        "command": "vibesync.unlockMyFiles",
+        "title": "%cmd.unlockMyFiles%"
+      },
+      {
+        "command": "vibesync.showLocks",
+        "title": "%cmd.showLocks%"
+      },
+      {
+        "command": "vibesync.syncDashboard",
+        "title": "%cmd.syncDashboard%"
+      },
+      {
+        "command": "vibesync.settings",
+        "title": "%cmd.settings%"
+      },
+      {
+        "command": "vibesync.searchChats",
+        "title": "%cmd.searchChats%"
+      },
+      {
+        "command": "vibesync.chatProjects",
+        "title": "%cmd.chatProjects%"
+      }
+    ],
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "vibesync-sidebar",
+          "title": "VibeSync",
+          "icon": "$(lock)"
+        }
+      ]
+    },
+    "views": {
+      "vibesync-sidebar": [
+        {
+          "id": "vibesync-my-locks",
+          "name": "%view.myLocks%"
+        },
+        {
+          "id": "vibesync-other-locks",
+          "name": "%view.otherLocks%"
+        },
+        {
+          "id": "vibesync-release-queue",
+          "name": "%view.releaseQueue%"
+        },
+        {
+          "id": "vibesync-actions",
+          "name": "%view.actions%"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "VibeSync",
+      "properties": {
+        "vibesync.language": {
+          "type": "string",
+          "default": "it",
+          "enum": ["it", "en"],
+          "enumDescriptions": ["Italiano", "English"],
+          "description": "%cfg.language%"
+        },
+        "vibesync.pythonPath": {
+          "type": "string",
+          "default": "python",
+          "description": "%cfg.pythonPath%"
+        },
+        "vibesync.lockScriptPath": {
+          "type": "string",
+          "default": "",
+          "description": "%cfg.lockScriptPath%"
+        },
+        "vibesync.releaseScriptPath": {
+          "type": "string",
+          "default": "",
+          "description": "%cfg.releaseScriptPath%"
+        },
+        "vibesync.pollingIntervalSeconds": {
+          "type": "number",
+          "default": 30,
+          "description": "%cfg.pollingInterval%"
+        },
+        "vibesync.enableFileWatcher": {
+          "type": "boolean",
+          "default": true,
+          "description": "%cfg.enableFileWatcher%"
+        },
+        "vibesync.enableNotifications": {
+          "type": "boolean",
+          "default": true,
+          "description": "%cfg.enableNotifications%"
+        },
+        "vibesync.searchScriptPath": {
+          "type": "string",
+          "default": "",
+          "description": "%cfg.searchScriptPath%"
+        }
+      }
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "package": "vsce package"
+  },
+  "devDependencies": {
+    "@types/vscode": "^1.85.0",
+    "@types/node": "^20.0.0",
+    "typescript": "^5.3.0",
+    "@vscode/vsce": "^3.0.0"
+  }
+}

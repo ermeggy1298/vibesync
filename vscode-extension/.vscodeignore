@@ -1,0 +1,11 @@
+.vscode/**
+.vscode-test/**
+src/**
+node_modules/**
+tsconfig.json
+test_output.html
+*.map
+.gitignore
+CONTRIBUTING.md
+VIBESYNC_GUIDA.html
+docs/**

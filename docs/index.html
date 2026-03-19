@@ -1,0 +1,666 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>VibeSync — AI-Aware Coordination for Vibe Coding Teams</title>
+<meta name="description" content="VibeSync brings chat search, project organization, file locking and sync to Claude Code in VS Code. The missing collaboration layer for AI vibe coding teams.">
+<link rel="canonical" href="https://ares-bi.github.io/vibesync/">
+
+<!-- Open Graph / Social -->
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://ares-bi.github.io/vibesync/">
+<meta property="og:title" content="VibeSync — The missing layer for AI vibe coding teams">
+<meta property="og:description" content="Search Claude Code chats, organize them into projects, prevent file conflicts — all from VS Code. Open source.">
+<meta property="og:image" content="https://ares-bi.github.io/vibesync/screenshot-chat-manager.png">
+
+<!-- Twitter Card -->
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="VibeSync — The missing layer for AI vibe coding teams">
+<meta name="twitter:description" content="Search Claude Code chats, organize them into projects, prevent file conflicts — all from VS Code. Open source.">
+<meta name="twitter:image" content="https://ares-bi.github.io/vibesync/screenshot-chat-manager.png">
+
+<script src="https://unpkg.com/lucide@latest"></script>
+<style>
+/* ===== Reset & Base ===== */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html { scroll-behavior: smooth; }
+body {
+    font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+    background: #0a0e17;
+    color: rgba(255,255,255,0.9);
+    line-height: 1.7;
+    overflow-x: hidden;
+}
+
+/* ===== Animations ===== */
+@keyframes fadeUp { from { opacity:0; transform:translateY(24px); } to { opacity:1; transform:translateY(0); } }
+@keyframes gradientFlow { 0% { background-position:0% 50%; } 50% { background-position:100% 50%; } 100% { background-position:0% 50%; } }
+
+/* ===== Lucide icon sizing ===== */
+.icon { width: 20px; height: 20px; stroke-width: 2; flex-shrink: 0; }
+.icon-lg { width: 28px; height: 28px; }
+.icon-xl { width: 36px; height: 36px; }
+
+/* ===== Language Toggle ===== */
+.lang-toggle {
+    position: fixed; top: 16px; right: 20px; z-index: 1000;
+    display: flex; border-radius: 8px; overflow: hidden;
+    border: 1px solid rgba(102,126,234,0.4);
+    backdrop-filter: blur(20px); background: rgba(10,14,23,0.85);
+}
+.lang-btn {
+    padding: 6px 14px; font-size: 12px; font-weight: 700;
+    cursor: pointer; border: none; background: transparent;
+    color: rgba(255,255,255,0.45); transition: all 0.2s; letter-spacing: 0.5px;
+}
+.lang-btn.active { background: linear-gradient(135deg, #667eea, #764ba2); color: #fff; }
+.lang-btn:hover:not(.active) { color: rgba(255,255,255,0.8); }
+
+/* i18n display rules */
+[data-lang="it"] { display: none !important; }
+body.lang-it [data-lang="it"] { display: initial !important; }
+body.lang-it [data-lang="en"] { display: none !important; }
+div[data-lang="en"], p[data-lang="en"], li[data-lang="en"], span[data-lang="en"], h1[data-lang="en"], h2[data-lang="en"], h3[data-lang="en"] { display: block; }
+div[data-lang="it"], p[data-lang="it"], li[data-lang="it"], h1[data-lang="it"], h2[data-lang="it"], h3[data-lang="it"] { display: none; }
+body.lang-it div[data-lang="en"], body.lang-it p[data-lang="en"], body.lang-it li[data-lang="en"], body.lang-it span[data-lang="en"], body.lang-it h1[data-lang="en"], body.lang-it h2[data-lang="en"], body.lang-it h3[data-lang="en"] { display: none; }
+body.lang-it div[data-lang="it"], body.lang-it p[data-lang="it"], body.lang-it li[data-lang="it"], body.lang-it span[data-lang="it"], body.lang-it h1[data-lang="it"], body.lang-it h2[data-lang="it"], body.lang-it h3[data-lang="it"] { display: block; }
+
+/* ===== Navigation ===== */
+.nav {
+    position: fixed; top: 0; left: 0; right: 0; z-index: 100;
+    background: rgba(10,14,23,0.92); backdrop-filter: blur(20px);
+    border-bottom: 1px solid rgba(102,126,234,0.12);
+    padding: 0 24px; display: flex; align-items: center; height: 52px;
+}
+.nav-brand { font-weight: 800; font-size: 15px; background: linear-gradient(135deg, #667eea, #764ba2); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; margin-right: 28px; display: flex; align-items: center; gap: 8px; }
+.nav-brand i { color: #667eea; -webkit-text-fill-color: #667eea; }
+.nav-links { display: flex; gap: 2px; }
+.nav-links a { color: rgba(255,255,255,0.45); text-decoration: none; font-size: 12.5px; font-weight: 600; padding: 6px 12px; border-radius: 6px; transition: all 0.2s; }
+.nav-links a:hover { color: #fff; background: rgba(102,126,234,0.12); }
+.nav-github { margin-left: auto; margin-right: 80px; display: flex; align-items: center; gap: 8px; }
+.nav-github a { color: rgba(255,255,255,0.5); text-decoration: none; display: flex; align-items: center; gap: 6px; font-size: 12.5px; font-weight: 600; padding: 5px 12px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.1); transition: all 0.2s; }
+.nav-github a:hover { color: #fff; border-color: rgba(255,255,255,0.25); background: rgba(255,255,255,0.05); }
+
+/* Hamburger menu */
+.nav-hamburger { display: none; margin-left: auto; margin-right: 80px; background: none; border: none; color: rgba(255,255,255,0.6); cursor: pointer; padding: 6px; }
+.nav-hamburger:hover { color: #fff; }
+.nav-mobile { display: none; position: fixed; top: 52px; left: 0; right: 0; background: rgba(10,14,23,0.97); backdrop-filter: blur(20px); border-bottom: 1px solid rgba(102,126,234,0.12); padding: 12px 24px; z-index: 99; flex-direction: column; gap: 4px; }
+.nav-mobile.open { display: flex; }
+.nav-mobile a { color: rgba(255,255,255,0.6); text-decoration: none; font-size: 14px; font-weight: 600; padding: 10px 12px; border-radius: 6px; transition: all 0.2s; }
+.nav-mobile a:hover { color: #fff; background: rgba(102,126,234,0.12); }
+
+/* ===== Sections ===== */
+.section { max-width: 1020px; margin: 0 auto; padding: 100px 24px 60px; animation: fadeUp 0.5s ease-out; }
+.section:first-of-type { padding-top: 120px; }
+
+/* ===== Hero ===== */
+.hero { text-align: center; padding: 140px 24px 60px; background: radial-gradient(ellipse at 30% 40%, rgba(102,126,234,0.1) 0%, transparent 60%), radial-gradient(ellipse at 70% 60%, rgba(118,75,162,0.07) 0%, transparent 60%); }
+.hero-badge { display: inline-flex; align-items: center; gap: 8px; background: rgba(102,126,234,0.12); border: 1px solid rgba(102,126,234,0.25); border-radius: 24px; padding: 5px 16px; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 2px; color: rgba(255,255,255,0.6); margin-bottom: 24px; }
+.hero h1 { font-size: clamp(30px, 5.5vw, 52px); font-weight: 900; background: linear-gradient(135deg, #667eea 0%, #764ba2 40%, #4facfe 100%); background-size: 200% auto; -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; animation: gradientFlow 4s linear infinite; margin-bottom: 18px; line-height: 1.15; }
+.hero-sub { font-size: clamp(15px, 2.2vw, 20px); color: rgba(255,255,255,0.45); max-width: 620px; margin: 0 auto 36px; line-height: 1.6; }
+.hero-cta { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; margin-bottom: 48px; }
+.cta-btn { padding: 11px 26px; border-radius: 10px; font-size: 13px; font-weight: 700; text-decoration: none; transition: all 0.2s; cursor: pointer; border: none; display: inline-flex; align-items: center; gap: 8px; }
+.cta-primary { background: linear-gradient(135deg, #667eea, #764ba2); color: #fff; box-shadow: 0 4px 20px rgba(102,126,234,0.25); }
+.cta-primary:hover { transform: translateY(-2px); box-shadow: 0 8px 28px rgba(102,126,234,0.35); }
+.cta-secondary { background: rgba(255,255,255,0.05); color: rgba(255,255,255,0.7); border: 1px solid rgba(255,255,255,0.12); }
+.cta-secondary:hover { background: rgba(255,255,255,0.08); color: #fff; }
+
+/* ===== Hero Screenshot ===== */
+.hero-screenshot { max-width: 900px; margin: 0 auto; border-radius: 12px; overflow: hidden; border: 1px solid rgba(102,126,234,0.2); box-shadow: 0 20px 60px rgba(0,0,0,0.5), 0 0 40px rgba(102,126,234,0.08); }
+.hero-screenshot img { width: 100%; display: block; }
+
+/* ===== Section headers ===== */
+.section-badge { display: inline-flex; align-items: center; gap: 6px; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 2px; margin-bottom: 10px; padding: 4px 12px; border-radius: 6px; }
+.badge-chat { color: #4facfe; background: rgba(79,172,254,0.08); border: 1px solid rgba(79,172,254,0.18); }
+.badge-lock { color: #f093fb; background: rgba(240,147,251,0.08); border: 1px solid rgba(240,147,251,0.18); }
+.badge-sync { color: #2dd4bf; background: rgba(45,212,191,0.08); border: 1px solid rgba(45,212,191,0.18); }
+.badge-start { color: #fee140; background: rgba(254,225,64,0.08); border: 1px solid rgba(254,225,64,0.18); }
+.badge-guide { color: #ff6b6b; background: rgba(255,107,107,0.08); border: 1px solid rgba(255,107,107,0.18); }
+
+.section h2 { font-size: clamp(22px, 3.5vw, 36px); font-weight: 800; margin-bottom: 14px; line-height: 1.2; }
+.section-desc { font-size: 15px; color: rgba(255,255,255,0.45); max-width: 680px; margin-bottom: 32px; line-height: 1.7; }
+
+/* ===== Cards ===== */
+.card-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px; }
+.card { background: rgba(255,255,255,0.025); border: 1px solid rgba(102,126,234,0.12); border-radius: 14px; padding: 24px; transition: all 0.25s; }
+.card:hover { border-color: rgba(102,126,234,0.35); transform: translateY(-3px); box-shadow: 0 8px 28px rgba(0,0,0,0.25); }
+.card-icon { width: 44px; height: 44px; border-radius: 12px; display: flex; align-items: center; justify-content: center; margin-bottom: 14px; }
+.card-icon.purple { background: linear-gradient(135deg, rgba(102,126,234,0.2), rgba(118,75,162,0.2)); color: #667eea; }
+.card-icon.cyan { background: linear-gradient(135deg, rgba(79,172,254,0.2), rgba(0,242,254,0.15)); color: #4facfe; }
+.card-icon.green { background: linear-gradient(135deg, rgba(45,212,191,0.2), rgba(20,184,166,0.15)); color: #2dd4bf; }
+.card-icon.pink { background: linear-gradient(135deg, rgba(240,147,251,0.2), rgba(245,87,108,0.15)); color: #f093fb; }
+.card-icon.orange { background: linear-gradient(135deg, rgba(250,112,154,0.2), rgba(254,225,64,0.15)); color: #fa709a; }
+.card-icon.red { background: linear-gradient(135deg, rgba(255,107,107,0.2), rgba(255,107,107,0.1)); color: #ff6b6b; }
+.card h3 { font-size: 15px; font-weight: 700; margin-bottom: 6px; }
+.card p { font-size: 13px; color: rgba(255,255,255,0.45); line-height: 1.6; }
+
+/* ===== Problem cards ===== */
+.problem-card { border-color: rgba(255,80,80,0.15); }
+.problem-card:hover { border-color: rgba(255,80,80,0.35); }
+
+/* ===== Steps ===== */
+.steps { display: flex; flex-direction: column; gap: 14px; }
+.step { display: flex; gap: 16px; align-items: flex-start; background: rgba(255,255,255,0.025); border: 1px solid rgba(102,126,234,0.1); border-radius: 12px; padding: 20px; transition: all 0.25s; }
+.step:hover { border-color: rgba(102,126,234,0.25); }
+.step-num { width: 36px; height: 36px; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 14px; flex-shrink: 0; color: #fff; }
+.step-num.purple { background: linear-gradient(135deg, #667eea, #764ba2); }
+.step-num.cyan { background: linear-gradient(135deg, #4facfe, #00f2fe); }
+.step-num.green { background: linear-gradient(135deg, #2dd4bf, #14b8a6); }
+.step-content { flex: 1; min-width: 0; }
+.step-content h3 { font-size: 14px; font-weight: 700; margin-bottom: 6px; }
+.step-content p, .step-content ul, .step-content ol { font-size: 13px; color: rgba(255,255,255,0.55); line-height: 1.7; }
+.step-content ul, .step-content ol { padding-left: 18px; }
+.step-content li { margin-bottom: 4px; }
+.step-content code { background: rgba(102,126,234,0.12); padding: 2px 6px; border-radius: 4px; font-size: 12px; font-family: 'SF Mono', 'Monaco', 'Courier New', monospace; }
+.step-content strong { color: rgba(255,255,255,0.8); }
+
+/* ===== Code Block ===== */
+.code-block { background: rgba(0,0,0,0.35); border: 1px solid rgba(102,126,234,0.12); border-radius: 10px; padding: 16px 20px; margin: 12px 0; font-family: 'SF Mono', 'Monaco', 'Courier New', monospace; font-size: 12.5px; color: #e2e8f0; overflow-x: auto; line-height: 1.7; white-space: pre; }
+.c-comment { color: rgba(255,255,255,0.25); }
+.c-cmd { color: #4facfe; }
+.c-key { color: #667eea; }
+.c-str { color: #2dd4bf; }
+
+/* ===== Comparison Table ===== */
+.compare-table { width: 100%; border-collapse: collapse; margin: 20px 0; font-size: 13px; }
+.compare-table th { text-align: left; padding: 10px 14px; background: rgba(102,126,234,0.08); border-bottom: 1px solid rgba(102,126,234,0.15); font-weight: 700; font-size: 11px; text-transform: uppercase; letter-spacing: 1px; }
+.compare-table td { padding: 9px 14px; border-bottom: 1px solid rgba(255,255,255,0.04); color: rgba(255,255,255,0.6); }
+.compare-table tr:hover td { background: rgba(255,255,255,0.015); }
+.check { color: #2dd4bf; font-weight: 700; }
+.cross { color: rgba(255,255,255,0.15); }
+
+/* ===== Divider ===== */
+.divider { height: 1px; background: linear-gradient(90deg, transparent, rgba(102,126,234,0.2), transparent); margin: 40px 0; }
+
+/* ===== Footer ===== */
+.footer { text-align: center; padding: 48px 24px; font-size: 12px; color: rgba(255,255,255,0.25); border-top: 1px solid rgba(255,255,255,0.04); }
+.footer strong { color: rgba(255,255,255,0.4); }
+.footer-links { display: flex; justify-content: center; gap: 24px; margin-top: 14px; flex-wrap: wrap; }
+.footer-links a { color: rgba(255,255,255,0.35); text-decoration: none; font-size: 12px; transition: color 0.2s; display: inline-flex; align-items: center; gap: 5px; }
+.footer-links a:hover { color: rgba(255,255,255,0.7); }
+
+/* ===== Responsive ===== */
+@media (max-width: 768px) {
+    .nav-links { display: none; }
+    .nav-github { display: none; }
+    .nav-hamburger { display: block; }
+    .section { padding: 80px 16px 40px; }
+    .card-grid { grid-template-columns: 1fr; }
+    .lang-toggle { top: 10px; right: 10px; }
+    .compare-table { display: block; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+}
+</style>
+</head>
+<body>
+
+<!-- Language Toggle -->
+<div class="lang-toggle">
+    <button class="lang-btn active" id="btn-en" onclick="setLang('en')">EN</button>
+    <button class="lang-btn" id="btn-it" onclick="setLang('it')">IT</button>
+</div>
+
+<!-- Navigation -->
+<nav class="nav">
+    <div class="nav-brand"><i data-lucide="lock" style="width:16px;height:16px;stroke-width:2.5"></i> VibeSync</div>
+    <div class="nav-links">
+        <a href="#problem" data-lang="en">Why</a><a href="#problem" data-lang="it">Perch&eacute;</a>
+        <a href="#chat">Chat Manager</a>
+        <a href="#lock" data-lang="en">Locking</a><a href="#lock" data-lang="it">Locking</a>
+        <a href="#sync">Sync</a>
+        <a href="#compare" data-lang="en">Compare</a><a href="#compare" data-lang="it">Confronto</a>
+        <a href="#start" data-lang="en">Install</a><a href="#start" data-lang="it">Installa</a>
+    </div>
+    <div class="nav-github">
+        <a href="https://github.com/AReS-BI/vibesync" target="_blank" rel="noopener"><i data-lucide="github" style="width:16px;height:16px"></i> GitHub</a>
+    </div>
+    <button class="nav-hamburger" onclick="document.getElementById('mobile-menu').classList.toggle('open')" aria-label="Menu">
+        <i data-lucide="menu" style="width:22px;height:22px"></i>
+    </button>
+</nav>
+
+<!-- Mobile menu -->
+<div class="nav-mobile" id="mobile-menu">
+    <a href="#problem" onclick="this.parentElement.classList.remove('open')" data-lang="en">Why</a>
+    <a href="#problem" onclick="this.parentElement.classList.remove('open')" data-lang="it">Perch&eacute;</a>
+    <a href="#chat" onclick="this.parentElement.classList.remove('open')">Chat Manager</a>
+    <a href="#lock" onclick="this.parentElement.classList.remove('open')">Locking</a>
+    <a href="#sync" onclick="this.parentElement.classList.remove('open')">Sync</a>
+    <a href="#compare" onclick="this.parentElement.classList.remove('open')" data-lang="en">Compare</a>
+    <a href="#compare" onclick="this.parentElement.classList.remove('open')" data-lang="it">Confronto</a>
+    <a href="#start" onclick="this.parentElement.classList.remove('open')" data-lang="en">Install</a>
+    <a href="#start" onclick="this.parentElement.classList.remove('open')" data-lang="it">Installa</a>
+    <a href="https://github.com/AReS-BI/vibesync" target="_blank" rel="noopener">GitHub</a>
+</div>
+
+<!-- ════════════════════════════════════════════════════════════════════ -->
+<!-- HERO                                                                -->
+<!-- ════════════════════════════════════════════════════════════════════ -->
+<section class="hero">
+<div style="max-width:720px;margin:0 auto;">
+    <div class="hero-badge"><i data-lucide="zap" style="width:14px;height:14px"></i> Open Source &mdash; by AReS-BI</div>
+
+    <h1 data-lang="en">VibeSync: the missing layer for<br>AI vibe coding teams</h1>
+    <h1 data-lang="it">VibeSync: il layer mancante per<br>i team di vibe coding AI</h1>
+
+    <p class="hero-sub" data-lang="en">Search your Claude Code chats, organize them into projects, rename sessions, prevent file conflicts &mdash; all from VS Code.</p>
+    <p class="hero-sub" data-lang="it">Cerca nelle chat di Claude Code, organizzale in progetti, rinomina le sessioni, previeni conflitti sui file &mdash; tutto da VS Code.</p>
+
+    <div class="hero-cta">
+        <a class="cta-btn cta-primary" href="#start"><i data-lucide="download" class="icon"></i> <span data-lang="en">Install</span><span data-lang="it">Installa</span></a>
+        <a class="cta-btn cta-secondary" href="https://github.com/AReS-BI/vibesync" target="_blank" rel="noopener"><i data-lucide="github" class="icon"></i> GitHub</a>
+        <a class="cta-btn cta-secondary" href="#chat"><i data-lucide="eye" class="icon"></i> <span data-lang="en">See Features</span><span data-lang="it">Scopri le feature</span></a>
+    </div>
+</div>
+
+<!-- Hero Screenshot -->
+<div class="hero-screenshot">
+    <img src="screenshot-chat-manager.png" alt="VibeSync Chat Manager in VS Code — project organization, search, one-click resume" loading="eager">
+</div>
+</section>
+
+<!-- ════════════════════════════════════════════════════════════════════ -->
+<!-- THE PROBLEM                                                         -->
+<!-- ════════════════════════════════════════════════════════════════════ -->
+<section class="section" id="problem">
+    <div class="section-badge badge-lock"><i data-lucide="alert-triangle" class="icon"></i> <span data-lang="en">The Problem</span><span data-lang="it">Il Problema</span></div>
+
+    <h2 data-lang="en">Claude Code is powerful.<br>But it's missing key tools.</h2>
+    <h2 data-lang="it">Claude Code &egrave; potente.<br>Ma gli mancano strumenti chiave.</h2>
+
+    <div class="card-grid" style="margin-top:28px;">
+        <div class="card problem-card">
+            <div class="card-icon red"><i data-lucide="search-x" class="icon-lg"></i></div>
+            <h3 data-lang="en">Can't search past chats</h3>
+            <h3 data-lang="it">Non puoi cercare nelle chat passate</h3>
+            <p data-lang="en">Sessions are saved as <code>.jsonl</code> files with names like <code>quiet-nibbling-spring</code>. Finding that chat where you solved a bug last week? Good luck.</p>
+            <p data-lang="it">Le sessioni sono file <code>.jsonl</code> con nomi tipo <code>quiet-nibbling-spring</code>. Trovare la chat dove hai risolto quel bug settimana scorsa? Buona fortuna.</p>
+        </div>
+        <div class="card problem-card">
+            <div class="card-icon red"><i data-lucide="folder-x" class="icon-lg"></i></div>
+            <h3 data-lang="en">No way to organize conversations</h3>
+            <h3 data-lang="it">Nessun modo di organizzare le conversazioni</h3>
+            <p data-lang="en">Unlike Claude Web, Claude Code has no projects, no folders, no tags. After a few weeks: 50+ chats, zero structure.</p>
+            <p data-lang="it">A differenza di Claude Web, Claude Code non ha progetti, cartelle n&eacute; tag. Dopo poche settimane: 50+ chat, zero struttura.</p>
+        </div>
+        <div class="card problem-card">
+            <div class="card-icon red"><i data-lucide="swords" class="icon-lg"></i></div>
+            <h3 data-lang="en">File conflicts in teams</h3>
+            <h3 data-lang="it">Conflitti sui file nel team</h3>
+            <p data-lang="en">Two developers (or AI agents) editing the same file? No warning, no lock, just merge hell later.</p>
+            <p data-lang="it">Due developer (o agenti AI) che modificano lo stesso file? Nessun avviso, nessun lock, solo merge hell dopo.</p>
+        </div>
+    </div>
+</section>
+
+<!-- ════════════════════════════════════════════════════════════════════ -->
+<!-- CHAT MANAGER                                                        -->
+<!-- ════════════════════════════════════════════════════════════════════ -->
+<section class="section" id="chat" style="background: radial-gradient(ellipse at 50% 30%, rgba(79,172,254,0.06) 0%, transparent 60%);">
+    <div class="section-badge badge-chat"><i data-lucide="sparkles" class="icon"></i> <span data-lang="en">Killer Feature</span><span data-lang="it">Feature Principale</span></div>
+
+    <h2 data-lang="en">Claude Code Chat Manager</h2>
+    <h2 data-lang="it">Chat Manager per Claude Code</h2>
+
+    <p class="section-desc" data-lang="en">Everything Claude Web has for chat organization &mdash; now in VS Code. No configuration needed. Just install and go.</p>
+    <p class="section-desc" data-lang="it">Tutto ci&ograve; che Claude Web offre per organizzare le chat &mdash; ora in VS Code. Nessuna configurazione. Installa e via.</p>
+
+    <div class="card-grid">
+        <div class="card">
+            <div class="card-icon cyan"><i data-lucide="search" class="icon-lg"></i></div>
+            <h3 data-lang="en">Full-Text Search</h3>
+            <h3 data-lang="it">Ricerca Full-Text</h3>
+            <p data-lang="en">Search across all your Claude Code conversations by keyword. Filter by project or role (user / assistant). Matches are highlighted with context.</p>
+            <p data-lang="it">Cerca in tutte le conversazioni per parola chiave. Filtra per progetto o ruolo (user / assistant). I match sono evidenziati con contesto.</p>
+        </div>
+        <div class="card">
+            <div class="card-icon cyan"><i data-lucide="pencil-line" class="icon-lg"></i></div>
+            <h3 data-lang="en">Rename &amp; Describe</h3>
+            <h3 data-lang="it">Rinomina &amp; Descrivi</h3>
+            <p data-lang="en">Give meaningful titles and descriptions to your sessions. Turn <code>eager-doodling-hellman</code> into <code>OAuth Login Refactor</code>.</p>
+            <p data-lang="it">Dai titoli e descrizioni significative alle sessioni. Trasforma <code>eager-doodling-hellman</code> in <code>Refactor Login OAuth</code>.</p>
+        </div>
+        <div class="card">
+            <div class="card-icon cyan"><i data-lucide="folder-kanban" class="icon-lg"></i></div>
+            <h3 data-lang="en">Project Organization</h3>
+            <h3 data-lang="it">Organizzazione in Progetti</h3>
+            <p data-lang="en">Create color-coded projects. Assign any chat &mdash; even months-old ones &mdash; to a project. Filter, browse, stay organized.</p>
+            <p data-lang="it">Crea progetti con colori. Assegna qualsiasi chat &mdash; anche vecchia di mesi &mdash; a un progetto. Filtra, naviga, resta organizzato.</p>
+        </div>
+        <div class="card">
+            <div class="card-icon cyan"><i data-lucide="play" class="icon-lg"></i></div>
+            <h3 data-lang="en">One-Click Resume</h3>
+            <h3 data-lang="it">Riprendi con un Click</h3>
+            <p data-lang="en">Found the chat you need? Click once &mdash; a terminal opens with <code>claude --resume</code>. Continue exactly where you left off.</p>
+            <p data-lang="it">Trovato la chat? Un click apre un terminale con <code>claude --resume</code>. Riprendi esattamente da dove avevi lasciato.</p>
+        </div>
+    </div>
+</section>
+
+<!-- ════════════════════════════════════════════════════════════════════ -->
+<!-- FILE LOCKING                                                        -->
+<!-- ════════════════════════════════════════════════════════════════════ -->
+<section class="section" id="lock" style="background: radial-gradient(ellipse at 50% 60%, rgba(240,147,251,0.04) 0%, transparent 60%);">
+    <div class="section-badge badge-lock"><i data-lucide="shield-check" class="icon"></i> <span data-lang="en">Team Collaboration</span><span data-lang="it">Collaborazione Team</span></div>
+
+    <h2 data-lang="en">File Locking for AI Teams</h2>
+    <h2 data-lang="it">File Locking per Team AI</h2>
+
+    <p class="section-desc" data-lang="en">Distributed lock system via GitHub API. Requires Full setup &mdash; not needed for Chat Manager only mode.</p>
+    <p class="section-desc" data-lang="it">Sistema di lock distribuito via GitHub API. Richiede il Full setup &mdash; non necessario per la modalit&agrave; Chat Manager.</p>
+
+    <div class="card-grid">
+        <div class="card">
+            <div class="card-icon pink"><i data-lucide="lock" class="icon-lg"></i></div>
+            <h3 data-lang="en">Automatic Locks</h3><h3 data-lang="it">Lock Automatici</h3>
+            <p data-lang="en">FileWatcher detects saves. Claude Code hooks lock before AI edits. Zero manual action.</p>
+            <p data-lang="it">FileWatcher rileva i salvataggi. Gli hook di Claude Code lockano prima delle modifiche AI.</p>
+        </div>
+        <div class="card">
+            <div class="card-icon pink"><i data-lucide="layout-dashboard" class="icon-lg"></i></div>
+            <h3 data-lang="en">Real-Time Sidebar</h3><h3 data-lang="it">Sidebar Real-Time</h3>
+            <p data-lang="en">My Locks, Other Locks, Release Queue &mdash; all in the VS Code sidebar. Polls GitHub every 30s.</p>
+            <p data-lang="it">I Miei Lock, Lock di Altri, Coda Rilascio &mdash; tutto nella sidebar. Polling GitHub ogni 30s.</p>
+        </div>
+        <div class="card">
+            <div class="card-icon pink"><i data-lucide="bell-ring" class="icon-lg"></i></div>
+            <h3 data-lang="en">Conflict Warnings</h3><h3 data-lang="it">Avvisi Conflitto</h3>
+            <p data-lang="en">Notified when someone locks or unlocks a file. Warning if you edit a file locked by another dev.</p>
+            <p data-lang="it">Notifica quando qualcuno locka o sblocca un file. Avviso se modifichi un file lockato da altri.</p>
+        </div>
+        <div class="card">
+            <div class="card-icon pink"><i data-lucide="timer-off" class="icon-lg"></i></div>
+            <h3 data-lang="en">Stale Cleanup</h3><h3 data-lang="it">Pulizia Lock Scaduti</h3>
+            <p data-lang="en">Locks older than 24h are flagged. Force-unlock with one command. No abandoned locks.</p>
+            <p data-lang="it">I lock &gt;24h vengono segnalati. Sblocca forzatamente con un comando. Nessun lock abbandonato.</p>
+        </div>
+    </div>
+</section>
+
+<!-- ════════════════════════════════════════════════════════════════════ -->
+<!-- SYNC                                                                -->
+<!-- ════════════════════════════════════════════════════════════════════ -->
+<section class="section" id="sync" style="background: radial-gradient(ellipse at 30% 50%, rgba(45,212,191,0.04) 0%, transparent 60%);">
+    <div class="section-badge badge-sync"><i data-lucide="refresh-cw" class="icon"></i> Sync Dashboard</div>
+
+    <h2 data-lang="en">Visual File Sync</h2>
+    <h2 data-lang="it">Sync File Visuale</h2>
+
+    <div class="card-grid" style="grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));">
+        <div class="card" style="text-align:center;">
+            <div class="card-icon green" style="margin:0 auto 14px;"><i data-lucide="scan-search" class="icon-lg"></i></div>
+            <h3 data-lang="en">Scan &amp; Compare</h3><h3 data-lang="it">Scansione &amp; Confronto</h3>
+            <p data-lang="en">New, modified, identical &mdash; at a glance.</p>
+            <p data-lang="it">Nuovi, modificati, identici &mdash; a colpo d'occhio.</p>
+        </div>
+        <div class="card" style="text-align:center;">
+            <div class="card-icon green" style="margin:0 auto 14px;"><i data-lucide="diff" class="icon-lg"></i></div>
+            <h3 data-lang="en">Inline Diff</h3><h3 data-lang="it">Diff Inline</h3>
+            <p data-lang="en">Opens VS Code's native diff view.</p>
+            <p data-lang="it">Apre il diff nativo di VS Code.</p>
+        </div>
+        <div class="card" style="text-align:center;">
+            <div class="card-icon green" style="margin:0 auto 14px;"><i data-lucide="check-square" class="icon-lg"></i></div>
+            <h3 data-lang="en">Selective Copy</h3><h3 data-lang="it">Copia Selettiva</h3>
+            <p data-lang="en">Check files, click Copy. Filters: all, new, modified.</p>
+            <p data-lang="it">Spunta file, clicca Copia. Filtri: tutti, nuovi, modificati.</p>
+        </div>
+        <div class="card" style="text-align:center;">
+            <div class="card-icon green" style="margin:0 auto 14px;"><i data-lucide="ban" class="icon-lg"></i></div>
+            <h3 data-lang="en">Exclusions</h3><h3 data-lang="it">Esclusioni</h3>
+            <p data-lang="en">Exclude files or folders with one click.</p>
+            <p data-lang="it">Escludi file o cartelle con un click.</p>
+        </div>
+    </div>
+</section>
+
+<!-- ════════════════════════════════════════════════════════════════════ -->
+<!-- COMPARISON TABLE                                                    -->
+<!-- ════════════════════════════════════════════════════════════════════ -->
+<section class="section" id="compare">
+    <h2>Claude Code vs Claude Code + VibeSync</h2>
+    <table class="compare-table">
+        <tr>
+            <th data-lang="en">Feature</th><th data-lang="it">Feature</th>
+            <th>Claude Code</th>
+            <th>+ VibeSync</th>
+        </tr>
+        <tr><td data-lang="en">Search past conversations</td><td data-lang="it">Cerca conversazioni passate</td><td class="cross">&times;</td><td class="check">&check; Full-text search</td></tr>
+        <tr><td data-lang="en">Rename chat sessions</td><td data-lang="it">Rinomina sessioni chat</td><td class="cross">&times;</td><td class="check">&check; Title + description</td></tr>
+        <tr><td data-lang="en">Organize chats in projects</td><td data-lang="it">Organizza chat in progetti</td><td class="cross">&times;</td><td class="check">&check; Color-coded projects</td></tr>
+        <tr><td data-lang="en">Resume old conversations</td><td data-lang="it">Riprendi conversazioni vecchie</td><td><code>--resume</code></td><td class="check">&check; One click</td></tr>
+        <tr><td data-lang="en">File lock coordination</td><td data-lang="it">Coordinamento lock file</td><td class="cross">&times;</td><td class="check">&check; Auto via GitHub</td></tr>
+        <tr><td data-lang="en">Conflict warnings</td><td data-lang="it">Avvisi conflitto</td><td class="cross">&times;</td><td class="check">&check; Real-time</td></tr>
+        <tr><td data-lang="en">File sync to Git</td><td data-lang="it">Sync file nel repo Git</td><td class="cross">&times;</td><td class="check">&check; Visual dashboard</td></tr>
+        <tr><td data-lang="en">Multilingual UI</td><td data-lang="it">UI multilingua</td><td class="cross">&times;</td><td class="check">&check; EN / IT</td></tr>
+    </table>
+</section>
+
+<!-- ════════════════════════════════════════════════════════════════════ -->
+<!-- GET STARTED                                                         -->
+<!-- ════════════════════════════════════════════════════════════════════ -->
+<section class="section" id="start" style="background: radial-gradient(ellipse at 60% 40%, rgba(254,225,64,0.04) 0%, transparent 60%);">
+    <div class="section-badge badge-start"><i data-lucide="rocket" class="icon"></i> <span data-lang="en">Install</span><span data-lang="it">Installa</span></div>
+
+    <h2 data-lang="en">Up and running in 2 minutes</h2>
+    <h2 data-lang="it">Operativo in 2 minuti</h2>
+
+    <div class="steps">
+        <div class="step">
+            <div class="step-num purple">1</div>
+            <div class="step-content">
+                <h3 data-lang="en">Clone and run the installer</h3>
+                <h3 data-lang="it">Clona e lancia l'installer</h3>
+                <div class="code-block"><span class="c-cmd">git clone</span> https://github.com/AReS-BI/vibesync.git
+<span class="c-cmd">python</span> vibesync/install.py</div>
+                <div data-lang="en"><p>The installer asks you to choose: <strong>Chat Manager only</strong> (zero config) or <strong>Full setup</strong> (locking + sync). It detects your Python path automatically.</p></div>
+                <div data-lang="it"><p>L'installer ti chiede: <strong>Solo Chat Manager</strong> (zero config) o <strong>Full setup</strong> (locking + sync). Rileva il path Python automaticamente.</p></div>
+            </div>
+        </div>
+        <div class="step">
+            <div class="step-num cyan">2</div>
+            <div class="step-content">
+                <h3 data-lang="en">Open VS Code</h3>
+                <h3 data-lang="it">Apri VS Code</h3>
+                <div data-lang="en"><p>Reload VS Code (<code>Ctrl+Shift+P</code> &rarr; <code>Reload Window</code>). The lock icon appears in the sidebar.</p></div>
+                <div data-lang="it"><p>Ricarica VS Code (<code>Ctrl+Shift+P</code> &rarr; <code>Reload Window</code>). L'icona lucchetto appare nella sidebar.</p></div>
+            </div>
+        </div>
+        <div class="step">
+            <div class="step-num green">3</div>
+            <div class="step-content">
+                <h3 data-lang="en">Start using it</h3>
+                <h3 data-lang="it">Inizia a usarlo</h3>
+                <div data-lang="en">
+                    <ul>
+                        <li><strong>Search Chats</strong> &mdash; find any past conversation</li>
+                        <li><strong>Chat Projects</strong> &mdash; organize sessions into themed groups</li>
+                        <li><strong>Sync Dashboard</strong> &mdash; push changed files to Git <em>(Full setup)</em></li>
+                        <li><strong>Settings</strong> &mdash; switch language EN/IT</li>
+                    </ul>
+                </div>
+                <div data-lang="it">
+                    <ul>
+                        <li><strong>Cerca nelle Chat</strong> &mdash; trova qualsiasi conversazione passata</li>
+                        <li><strong>Progetti Chat</strong> &mdash; organizza sessioni in gruppi tematici</li>
+                        <li><strong>Sync Dashboard</strong> &mdash; sincronizza file nel repo Git <em>(Full setup)</em></li>
+                        <li><strong>Impostazioni</strong> &mdash; cambia lingua EN/IT</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- ════════════════════════════════════════════════════════════════════ -->
+<!-- USAGE GUIDE                                                         -->
+<!-- ════════════════════════════════════════════════════════════════════ -->
+<section class="section" id="guide">
+    <div class="section-badge badge-guide"><i data-lucide="book-open" class="icon"></i> <span data-lang="en">Usage Guide</span><span data-lang="it">Guida all'Uso</span></div>
+
+    <h2 data-lang="en">How to use VibeSync</h2>
+    <h2 data-lang="it">Come usare VibeSync</h2>
+
+    <p class="section-desc" data-lang="en">Step-by-step workflows for the most common tasks.</p>
+    <p class="section-desc" data-lang="it">Workflow step-by-step per le operazioni pi&ugrave; comuni.</p>
+
+    <!-- Search workflow -->
+    <h3 style="font-size:16px;font-weight:700;margin-bottom:14px;display:flex;align-items:center;gap:8px;"><i data-lucide="search" class="icon" style="color:#4facfe"></i> <span data-lang="en">Searching past conversations</span><span data-lang="it">Cercare nelle conversazioni passate</span></h3>
+    <div class="steps">
+        <div class="step">
+            <div class="step-num cyan">1</div>
+            <div class="step-content">
+                <h3 data-lang="en">Open the Search panel</h3>
+                <h3 data-lang="it">Apri il pannello di Ricerca</h3>
+                <div data-lang="en"><p>Click the <strong>lock icon</strong> in the VS Code sidebar &rarr; <strong>Search Chats</strong>. Or press <code>Ctrl+Shift+P</code> &rarr; <code>VibeSync: Search Chats</code>.</p></div>
+                <div data-lang="it"><p>Clicca l'<strong>icona lucchetto</strong> nella sidebar VS Code &rarr; <strong>Cerca nelle Chat</strong>. Oppure <code>Ctrl+Shift+P</code> &rarr; <code>VibeSync: Search Chats</code>.</p></div>
+            </div>
+        </div>
+        <div class="step">
+            <div class="step-num cyan">2</div>
+            <div class="step-content">
+                <h3 data-lang="en">Type a keyword and search</h3>
+                <h3 data-lang="it">Scrivi una parola chiave e cerca</h3>
+                <div data-lang="en">
+                    <p>Type any keyword (e.g. <code>OAuth bug</code>) and press Enter. Use the filters:</p>
+                    <ul>
+                        <li><strong>Claude project</strong> &mdash; limit to a specific workspace</li>
+                        <li><strong>Messages</strong> &mdash; search only in your messages or only in Claude's responses</li>
+                    </ul>
+                </div>
+                <div data-lang="it">
+                    <p>Digita una parola chiave (es. <code>OAuth bug</code>) e premi Invio. Usa i filtri:</p>
+                    <ul>
+                        <li><strong>Progetto Claude</strong> &mdash; limita a un workspace specifico</li>
+                        <li><strong>Messaggi</strong> &mdash; cerca solo nei tuoi messaggi o solo nelle risposte di Claude</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+        <div class="step">
+            <div class="step-num cyan">3</div>
+            <div class="step-content">
+                <h3 data-lang="en">Browse results and resume</h3>
+                <h3 data-lang="it">Naviga i risultati e riprendi</h3>
+                <div data-lang="en"><p>Results are grouped by conversation with highlighted matches. Click <strong>Resume Chat</strong> to reopen the session in a terminal.</p></div>
+                <div data-lang="it"><p>I risultati sono raggruppati per conversazione con match evidenziati. Clicca <strong>Riprendi Chat</strong> per riaprire la sessione nel terminale.</p></div>
+            </div>
+        </div>
+    </div>
+
+    <div class="divider"></div>
+
+    <!-- Rename & Projects workflow -->
+    <h3 style="font-size:16px;font-weight:700;margin-bottom:14px;display:flex;align-items:center;gap:8px;"><i data-lucide="folder-kanban" class="icon" style="color:#2dd4bf"></i> <span data-lang="en">Organizing chats with Projects</span><span data-lang="it">Organizzare le chat con i Progetti</span></h3>
+    <div class="steps">
+        <div class="step">
+            <div class="step-num green">1</div>
+            <div class="step-content">
+                <h3 data-lang="en">Rename a chat</h3>
+                <h3 data-lang="it">Rinomina una chat</h3>
+                <div data-lang="en"><p>On any chat card (in Search or Projects view), click the <strong>pencil icon</strong>. An inline form appears: type a <strong>title</strong> and a short <strong>description</strong> (max 50 chars). Press Enter to save.</p></div>
+                <div data-lang="it"><p>Su qualsiasi card chat (nella vista Ricerca o Progetti), clicca l'<strong>icona matita</strong>. Appare un form inline: scrivi un <strong>titolo</strong> e una breve <strong>descrizione</strong> (max 50 caratteri). Premi Invio per salvare.</p></div>
+            </div>
+        </div>
+        <div class="step">
+            <div class="step-num green">2</div>
+            <div class="step-content">
+                <h3 data-lang="en">Create a project</h3>
+                <h3 data-lang="it">Crea un progetto</h3>
+                <div data-lang="en"><p>Open the <strong>Projects</strong> tab &rarr; click <strong>+ New</strong> &rarr; type a name (e.g. <code>API Refactor</code>). A color-coded pill appears in the toolbar.</p></div>
+                <div data-lang="it"><p>Apri il tab <strong>Progetti</strong> &rarr; clicca <strong>+ Nuovo</strong> &rarr; scrivi un nome (es. <code>Refactor API</code>). Un pill colorato appare nella toolbar.</p></div>
+            </div>
+        </div>
+        <div class="step">
+            <div class="step-num green">3</div>
+            <div class="step-content">
+                <h3 data-lang="en">Assign chats to a project</h3>
+                <h3 data-lang="it">Assegna chat a un progetto</h3>
+                <div data-lang="en">
+                    <p>On any chat card, click the <strong>Project</strong> button &rarr; pick a project from the dropdown. Works from both Search results and the Projects view.</p>
+                    <ul>
+                        <li>A chat can belong to <strong>multiple projects</strong></li>
+                        <li>You can assign <strong>old chats retroactively</strong> &mdash; search for them first</li>
+                        <li>Click a project pill to <strong>filter</strong> and see only its chats</li>
+                    </ul>
+                </div>
+                <div data-lang="it">
+                    <p>Su qualsiasi card chat, clicca il bottone <strong>Progetto</strong> &rarr; scegli un progetto dal dropdown. Funziona sia dai risultati Ricerca che dalla vista Progetti.</p>
+                    <ul>
+                        <li>Una chat pu&ograve; appartenere a <strong>pi&ugrave; progetti</strong></li>
+                        <li>Puoi assegnare <strong>chat vecchie retroattivamente</strong> &mdash; cercale prima</li>
+                        <li>Clicca un pill progetto per <strong>filtrare</strong> e vedere solo le sue chat</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="divider"></div>
+
+    <!-- Locking workflow -->
+    <h3 style="font-size:16px;font-weight:700;margin-bottom:14px;display:flex;align-items:center;gap:8px;"><i data-lucide="lock" class="icon" style="color:#f093fb"></i> <span data-lang="en">File locking workflow</span><span data-lang="it">Workflow di file locking</span></h3>
+    <div class="steps">
+        <div class="step">
+            <div class="step-num purple">1</div>
+            <div class="step-content">
+                <h3 data-lang="en">Automatic locking</h3>
+                <h3 data-lang="it">Locking automatico</h3>
+                <div data-lang="en"><p>When you save a file, VibeSync's FileWatcher acquires a lock via GitHub API. When Claude Code edits a file, the PreToolUse hook does the same. No manual action needed.</p></div>
+                <div data-lang="it"><p>Quando salvi un file, il FileWatcher di VibeSync acquisisce un lock via GitHub API. Quando Claude Code modifica un file, l'hook PreToolUse fa lo stesso. Nessuna azione manuale.</p></div>
+            </div>
+        </div>
+        <div class="step">
+            <div class="step-num purple">2</div>
+            <div class="step-content">
+                <h3 data-lang="en">See who's working on what</h3>
+                <h3 data-lang="it">Vedi chi sta lavorando su cosa</h3>
+                <div data-lang="en"><p>The sidebar shows 3 sections: <strong>My Locks</strong>, <strong>Other Locks</strong>, <strong>Release Queue</strong>. Status bar shows lock count. Notifications pop up when teammates lock/unlock files.</p></div>
+                <div data-lang="it"><p>La sidebar mostra 3 sezioni: <strong>I Miei Lock</strong>, <strong>Lock di Altri</strong>, <strong>Coda Rilascio</strong>. La status bar mostra il conteggio. Le notifiche appaiono quando i colleghi lockano/sbloccano file.</p></div>
+            </div>
+        </div>
+        <div class="step">
+            <div class="step-num purple">3</div>
+            <div class="step-content">
+                <h3 data-lang="en">Sync and release</h3>
+                <h3 data-lang="it">Sync e rilascio</h3>
+                <div data-lang="en"><p>Open <strong>Sync Dashboard</strong> to compare your workspace with the Git repo. Select files, preview diffs, copy. Locks are released automatically after sync.</p></div>
+                <div data-lang="it"><p>Apri la <strong>Sync Dashboard</strong> per confrontare il tuo workspace con il repo Git. Seleziona file, preview diff, copia. I lock si rilasciano automaticamente dopo il sync.</p></div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- ════════════════════════════════════════════════════════════════════ -->
+<!-- FOOTER                                                              -->
+<!-- ════════════════════════════════════════════════════════════════════ -->
+<div class="footer">
+    <strong>VibeSync</strong> by AReS-BI &mdash; Open Source &mdash; MIT License<br>
+    <span data-lang="en">AI-aware file coordination for vibe coding teams</span>
+    <span data-lang="it">Coordinamento file AI-aware per team di vibe coding</span>
+    <div class="footer-links">
+        <a href="https://github.com/AReS-BI/vibesync" target="_blank" rel="noopener"><i data-lucide="github" style="width:14px;height:14px"></i> Repository</a>
+        <a href="https://github.com/AReS-BI/vibesync/issues" target="_blank" rel="noopener"><i data-lucide="bug" style="width:14px;height:14px"></i> <span data-lang="en">Report a bug</span><span data-lang="it">Segnala un bug</span></a>
+        <a href="https://github.com/AReS-BI/vibesync/blob/main/CONTRIBUTING.md" target="_blank" rel="noopener"><i data-lucide="heart" style="width:14px;height:14px"></i> <span data-lang="en">Contribute</span><span data-lang="it">Contribuisci</span></a>
+    </div>
+</div>
+
+<!-- ════════════════════════════════════════════════════════════════════ -->
+<!-- SCRIPTS                                                             -->
+<!-- ════════════════════════════════════════════════════════════════════ -->
+<script>
+// Language toggle
+function setLang(lang) {
+    document.body.classList.toggle('lang-it', lang === 'it');
+    document.getElementById('btn-en').classList.toggle('active', lang === 'en');
+    document.getElementById('btn-it').classList.toggle('active', lang === 'it');
+    localStorage.setItem('vibesync-lang', lang);
+}
+const saved = localStorage.getItem('vibesync-lang');
+if (saved === 'it') setLang('it');
+
+// Initialize Lucide icons
+lucide.createIcons();
+</script>
+</body>
+</html>

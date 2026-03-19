@@ -1,0 +1,18 @@
+{
+  "github_token": "ghp_YOUR_GITHUB_TOKEN_HERE",
+  "github_repo": "your-org/your-repo",
+  "github_branch": "main",
+  "github_lock_branch": "vibesync-locks",
+  "developer_name": "YourName",
+  "local_root": "/path/to/your/working/directory",
+  "github_desktop_root": "/path/to/your/git/repo",
+  "excluded_dirs": [
+    "node_modules",
+    ".vscode",
+    "__pycache__"
+  ],
+  "excluded_files": [
+    ".env",
+    ".gitignore"
+  ]
+}
