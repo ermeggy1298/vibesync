@@ -26,7 +26,7 @@ Thank you for your interest in contributing to VibeSync!
 
 ```bash
 # Clone the repo
-git clone https://github.com/AReS-BI/vibesync.git
+git clone https://github.com/ermeggy1298/vibesync.git
 cd vibesync
 
 # Setup (installs everything automatically)

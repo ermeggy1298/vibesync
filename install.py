@@ -496,7 +496,7 @@ def main():
         print("  💡 To enable file locking & sync later,")
         print("     run: python install.py  (choose Full setup)")
     print()
-    print("  Docs: https://github.com/AReS-BI/vibesync")
+    print("  Docs: https://github.com/ermeggy1298/vibesync")
     print()
 
 

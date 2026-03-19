@@ -75,7 +75,7 @@ Full EN/IT support. Toggle in Settings. All UI, messages, sidebar labels.
 ### One-command setup
 
 ```bash
-git clone https://github.com/AReS-BI/vibesync.git
+git clone https://github.com/ermeggy1298/vibesync.git
 python vibesync/install.py
 ```
 
@@ -184,7 +184,7 @@ Se usi **Claude Code** in VS Code, conosci il problema:
 ### Guida Rapida
 
 ```bash
-git clone https://github.com/AReS-BI/vibesync.git
+git clone https://github.com/ermeggy1298/vibesync.git
 python vibesync/install.py
 ```
 
@@ -197,5 +197,5 @@ L'installer rileva Python automaticamente e offre 2 modalità: **Chat Manager on
 ---
 
 <p align="center">
-  <strong>VibeSync</strong> by <a href="https://github.com/AReS-BI">AReS-BI</a> — AI-aware file coordination for vibe coding teams
+  <strong>VibeSync</strong> by <a href="https://github.com/ermeggy1298">AReS-BI</a> — AI-aware file coordination for vibe coding teams
 </p>
