@@ -118,7 +118,7 @@ If you prefer to configure manually, see [`config.example.json`](config.example.
 
 ## 📖 Documentation
 
-- **[Interactive Guide (EN/IT)](https://aresbi.github.io/vibesync/)** — Navigable presentation with full feature walkthrough
+- **[Interactive Guide (EN/IT)](https://ermeggy1298.github.io/vibesync/)** — Navigable presentation with full feature walkthrough
 - **[Contributing](CONTRIBUTING.md)** — How to contribute, dev setup, adding languages
 
 ## 🏗 Architecture
@@ -192,7 +192,7 @@ python vibesync/install.py
 
 L'installer rileva Python automaticamente e offre 2 modalità: **Chat Manager only** (zero config) o **Full setup** (locking + sync + hooks).
 
-**[Guida interattiva completa (ITA/ENG)](https://aresbi.github.io/vibesync/)**
+**[Guida interattiva completa (ITA/ENG)](https://ermeggy1298.github.io/vibesync/)**
 
 ---
 
