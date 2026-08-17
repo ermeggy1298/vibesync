@@ -35,6 +35,7 @@ If you use **Claude Code** in VS Code, you know the pain:
 - **🔍 Can't search past conversations** — Sessions are saved as `.jsonl` files with random names like `quiet-nibbling-spring`. Finding last week's chat? Good luck.
 - **📁 No way to organize chats** — Unlike Claude Web, there are no projects, no folders, no tags. After a few weeks you have 50+ sessions and zero structure.
 - **💥 File conflicts in teams** — Two developers (or AI agents) editing the same file? No warning, no lock, just merge hell.
+- **👀 Zero visibility on teammate work** — Your teammate pushed 20 commits over the weekend. Catching up means scrolling through the raw `git log` line by line. And your product manager? Blind — no idea what actually shipped, no way to track team output without pestering devs for status updates.
 
 **VibeSync fixes all of this.**
 
@@ -206,6 +207,7 @@ Se usi **Claude Code** in VS Code, conosci il problema:
 - **🔍 Non puoi cercare nelle chat passate** — Le sessioni sono salvate come file `.jsonl` con nomi casuali. Trovare la chat di settimana scorsa? Buona fortuna.
 - **📁 Nessun modo di organizzare le conversazioni** — A differenza di Claude Web, Claude Code non ha progetti, cartelle né tag.
 - **💥 Conflitti sui file nel team** — Due developer che modificano lo stesso file? Nessun avviso, solo merge hell.
+- **👀 Zero visibilità sul lavoro dei colleghi** — Il tuo collega ha pushato 20 commit nel weekend. Allinearti significa scorrere il `git log` grezzo riga per riga. E il tuo product manager? Cieco — nessuna idea di cosa sia stato rilasciato, nessun modo di monitorare l'output del team senza rompere le scatole ai dev.
 
 ### Funzionalità Principali
 
