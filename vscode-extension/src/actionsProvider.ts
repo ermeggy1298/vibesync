@@ -43,10 +43,16 @@ export class ActionsProvider implements vscode.TreeDataProvider<ActionItem> {
             items.push(
                 new ActionItem(t('actions.syncDashboard'), 'sync', 'vibesync.syncDashboard'),
                 new ActionItem(t('actions.releaseFiles'), 'cloud-upload', 'vibesync.release'),
+                new ActionItem(t('actions.markReleased'), 'check', 'vibesync.markReleased'),
+                new ActionItem(t('actions.purgeReleased'), 'trash', 'vibesync.purgeReleased'),
                 new ActionItem(t('actions.fetchGithub'), 'cloud-download', 'vibesync.fetchNow'),
                 new ActionItem(t('actions.unlockMyLocks'), 'unlock', 'vibesync.unlockMyFiles'),
+                new ActionItem('Recap AI (commit di un dev)', 'sparkle', 'vibesync.showRecap'),
             );
         }
+
+        // VibeBuddy — always available
+        items.push(new ActionItem('VibeBuddy', 'person', 'vibesync.showBuddy'));
 
         // Settings — always available
         items.push(new ActionItem(t('actions.settings'), 'gear', 'vibesync.settings'));

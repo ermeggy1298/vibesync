@@ -15,9 +15,12 @@
 <p align="center">
   <a href="#-features">Features</a> •
   <a href="#-quick-start">Quick Start</a> •
-  <a href="#-chat-manager">Chat Manager</a> •
+  <a href="#-chat-manager-the-killer-feature">Chat Manager</a> •
   <a href="#-file-locking">File Locking</a> •
   <a href="#-sync-dashboard">Sync Dashboard</a> •
+  <a href="#-ai-recap-new">AI Recap</a> •
+  <a href="#-telegram-notifications-new">Telegram</a> •
+  <a href="#-vibebuddy-new">VibeBuddy</a> •
   <a href="#-documentation">Docs</a>
 </p>
 
@@ -65,6 +68,33 @@ Visual file sync between your workspace and Git repo:
 - Inline diff preview with VS Code's native diff view
 - Selective copy with smart filters
 - Exclude files/folders with one click
+
+### ✨ AI Recap (NEW)
+
+**The feature no one else has.** Ask *"what did Massimo do between Aug 14 and Aug 17?"* and get back a structured technical narrative — grouped by functional area (CoGe, FinRisk, UI, Auth, …) — inferred by Claude from the actual code paths and commit messages of your monorepo.
+
+- Pick author + date range from the panel — VibeSync runs `git log --author=X --since=... --until=...` on your Git repo
+- Sends the full diff to Claude (Sonnet 5 recommended, Opus 5 for max quality, Haiku 4.5 for cheap)
+- Returns an HTML with: **Overview** → **By functional area** → **Attention points** (risky auth/SQL/migration changes) → **Commit timeline**
+- Save to disk in `~/.vibesync/recaps/` for future reference
+- Typical cost: ~$0.02–0.05 per recap with Sonnet, ~$0.004 with Haiku
+
+Why it's killer: Slack/Linear/GitHub are generalist — they don't know that `DbPuma/finrisk/` is FinRisk and `ui/src/components/CrCheck/` is CrCheck. An LLM with your monorepo context does, and describes the work in your team's language.
+
+### 📱 Telegram Notifications (NEW)
+
+Bot notifications to your team the moment you release files from the Sync Dashboard.
+
+- One-time setup: create a bot with `@BotFather`, each dev sends `/start` to get their `chat_id`
+- Configure in Settings → Notifications: bot token + list of recipients
+- When you click "Release Selected" on the Sync Dashboard, all teammates get a Telegram message like:
+  `🚀 Meggio released 3 files on "dev": • DbPuma/views.py • ...`
+- The sender is auto-skipped (unless `notify_self` is enabled)
+- Best-effort: failures don't block the release, they surface as VS Code warnings
+
+### 🤖 VibeBuddy (NEW)
+
+An AI companion inside VS Code (Claude Haiku) that observes your coding sessions and narrates what's happening — files touched, patterns detected, welcome-back messages after inactivity. Adjustable verbosity (quiet / normal / chatty). Requires Anthropic API key.
 
 ### 🌐 Multilingual
 
@@ -114,6 +144,9 @@ If you prefer to configure manually, see [`config.example.json`](config.example.
 | File lock coordination | ❌ | ✅ Auto via GitHub |
 | Conflict warnings | ❌ | ✅ Real-time |
 | File sync to Git | ❌ | ✅ Visual dashboard |
+| **AI recap of teammate's commits** | ❌ | ✅ Grouped by area |
+| **Telegram alerts on release** | ❌ | ✅ Bot to team |
+| **AI coding companion** | ❌ | ✅ VibeBuddy (Haiku) |
 | Multilingual UI | ❌ | ✅ EN / IT |
 
 ## 📖 Documentation
@@ -179,6 +212,9 @@ Se usi **Claude Code** in VS Code, conosci il problema:
 - **🔍 Chat Manager** — Ricerca full-text, rinomina sessioni, organizzazione in progetti colorati, riprendi chat con un click
 - **🔒 File Locking** — Lock automatici via GitHub API, sidebar real-time, avvisi conflitto, pulizia lock scaduti
 - **📊 Sync Dashboard** — Confronto visuale workspace/repo, diff inline, copia selettiva, esclusioni
+- **✨ AI Recap** (NUOVO) — Chiedi *"cosa ha fatto Massimo dal 14 al 17 agosto"* e ricevi un narrativo tecnico raggruppato per area funzionale (CoGe, FinRisk, UI, Auth…). Interroga `git log` per autore/date e passa il diff a Claude Sonnet, che deduce le aree dai path del monorepo. HTML salvabile su disco.
+- **📱 Notifiche Telegram** (NUOVO) — Bot che avvisa il team al momento del rilascio dalla Sync Dashboard. Setup di 5 minuti con `@BotFather` + `chat_id` per dev. Skip auto-notifica al mittente.
+- **🤖 VibeBuddy** (NUOVO) — AI companion (Claude Haiku) dentro VS Code che commenta la tua sessione di coding, con verbosità configurabile
 - **🌐 Multilingua** — Toggle EN/IT nelle impostazioni
 
 ### Guida Rapida

@@ -1,6 +1,10 @@
 {
   "cmd.showQueue": "VibeSync: Show Release Queue",
   "cmd.release": "VibeSync: Release Selected Files",
+  "cmd.markReleased": "VibeSync: Mark Files as Already Released",
+  "cmd.purgeReleased": "VibeSync: Clean Released Entries from Queue",
+  "cmd.nextDiffChange": "VibeSync: Go to Next Difference",
+  "cmd.prevDiffChange": "VibeSync: Go to Previous Difference",
   "cmd.forceUnlock": "VibeSync: Force Unlock Stale Locks",
   "cmd.fetchNow": "VibeSync: Fetch from GitHub",
   "cmd.unlockMyFiles": "VibeSync: Release All My Manual Locks",

@@ -2,6 +2,8 @@
 .vscode-test/**
 src/**
 node_modules/**
+!media/**
+media/js/three-bundle-src.js
 tsconfig.json
 test_output.html
 *.map

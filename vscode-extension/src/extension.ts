@@ -11,10 +11,13 @@ import * as lockManager from './lockManager';
 import * as statusBar from './statusBar';
 import * as fileWatcher from './fileWatcher';
 import * as notificationManager from './notificationManager';
-import { showReleasePanel, showLocksPanel } from './releasePanel';
+import { showReleasePanel, showLocksPanel, showMarkReleasedPanel, showPurgeReleasedPanel, showUnlockMyLocksPanel } from './releasePanel';
 import { showSyncDashboard } from './syncPanel';
 import { showConfigPanel } from './configPanel';
+import { BuddyViewProvider, showBuddyPanel } from './buddyPanel';
+import { testBuddy } from './buddyEngine';
 import { showSearchPanel } from './searchPanel';
+import { showRecapPanel } from './recapPanel';
 import { MyLocksProvider, OtherLocksProvider, ReleaseQueueProvider } from './treeViewProvider';
 import { ActionsProvider } from './actionsProvider';
 import { initLang, t } from './i18n';
@@ -32,11 +35,28 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     // 0. Init i18n
     initLang();
 
-    // 1. Commands that ALWAYS work (no config needed)
+    // 1. VibeBuddy sidebar view (always registered)
+    const buddyProvider = new BuddyViewProvider(context.extensionUri);
+    context.subscriptions.push(
+        vscode.window.registerWebviewViewProvider(BuddyViewProvider.viewType, buddyProvider),
+    );
+
+    // 2. Commands that ALWAYS work (no config needed)
     context.subscriptions.push(
         vscode.commands.registerCommand('vibesync.settings', () => showConfigPanel()),
         vscode.commands.registerCommand('vibesync.searchChats', () => showSearchPanel('search')),
         vscode.commands.registerCommand('vibesync.chatProjects', () => showSearchPanel('projects')),
+        vscode.commands.registerCommand('vibesync.showBuddy', () => showBuddyPanel(context)),
+        vscode.commands.registerCommand('vibesync.testBuddy', () => testBuddy()),
+        vscode.commands.registerCommand('vibesync.showRecap', () => showRecapPanel()),
+        // Diff navigation (delegano ai comandi built-in di VS Code; aggiungono solo
+        // un alias coerente, keybindings F7/Shift+F7 e bottoni nella title bar).
+        vscode.commands.registerCommand('vibesync.nextDiffChange', async () => {
+            await vscode.commands.executeCommand('workbench.action.compareEditor.nextChange');
+        }),
+        vscode.commands.registerCommand('vibesync.prevDiffChange', async () => {
+            await vscode.commands.executeCommand('workbench.action.compareEditor.previousChange');
+        }),
     );
 
     // 2. Check config — determines full mode vs chat-only mode
@@ -84,6 +104,8 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     context.subscriptions.push(
         vscode.commands.registerCommand('vibesync.showQueue', () => showReleasePanel()),
         vscode.commands.registerCommand('vibesync.release', () => showReleasePanel()),
+        vscode.commands.registerCommand('vibesync.markReleased', () => showMarkReleasedPanel()),
+        vscode.commands.registerCommand('vibesync.purgeReleased', () => showPurgeReleasedPanel()),
         vscode.commands.registerCommand('vibesync.showLocks', () => showLocksPanel()),
         vscode.commands.registerCommand('vibesync.syncDashboard', () => showSyncDashboard()),
 
@@ -93,14 +115,10 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         }),
 
         vscode.commands.registerCommand('vibesync.unlockMyFiles', async () => {
-            const result = await lockManager.releaseAllManualLocks();
-            if (result.success) {
-                const count = result.released?.length ?? 0;
-                vscode.window.showInformationMessage(t('ext.manualLocksReleased', count));
-                await pollLocks();
-            } else {
-                vscode.window.showErrorMessage(t('ext.unlockError', result.error || ''));
-            }
+            // Apre QuickPick multi-select con i lock dell'utente (tutti pre-selezionati).
+            // Permette di deselezionare quelli da mantenere prima dello sblocco.
+            await showUnlockMyLocksPanel();
+            await pollLocks();
         }),
 
         vscode.commands.registerCommand('vibesync.forceUnlock', async () => {

@@ -205,9 +205,12 @@ body.lang-it div[data-lang="it"], body.lang-it p[data-lang="it"], body.lang-it l
     <div class="nav-brand"><i data-lucide="lock" style="width:16px;height:16px;stroke-width:2.5"></i> VibeSync</div>
     <div class="nav-links">
         <a href="#problem" data-lang="en">Why</a><a href="#problem" data-lang="it">Perch&eacute;</a>
-        <a href="#chat">Chat Manager</a>
+        <a href="#chat">Chat</a>
         <a href="#lock" data-lang="en">Locking</a><a href="#lock" data-lang="it">Locking</a>
         <a href="#sync">Sync</a>
+        <a href="#recap">Recap AI</a>
+        <a href="#telegram">Telegram</a>
+        <a href="#buddy">Buddy</a>
         <a href="#compare" data-lang="en">Compare</a><a href="#compare" data-lang="it">Confronto</a>
         <a href="#start" data-lang="en">Install</a><a href="#start" data-lang="it">Installa</a>
     </div>
@@ -226,6 +229,9 @@ body.lang-it div[data-lang="it"], body.lang-it p[data-lang="it"], body.lang-it l
     <a href="#chat" onclick="this.parentElement.classList.remove('open')">Chat Manager</a>
     <a href="#lock" onclick="this.parentElement.classList.remove('open')">Locking</a>
     <a href="#sync" onclick="this.parentElement.classList.remove('open')">Sync</a>
+    <a href="#recap" onclick="this.parentElement.classList.remove('open')">Recap AI</a>
+    <a href="#telegram" onclick="this.parentElement.classList.remove('open')">Telegram</a>
+    <a href="#buddy" onclick="this.parentElement.classList.remove('open')">VibeBuddy</a>
     <a href="#compare" onclick="this.parentElement.classList.remove('open')" data-lang="en">Compare</a>
     <a href="#compare" onclick="this.parentElement.classList.remove('open')" data-lang="it">Confronto</a>
     <a href="#start" onclick="this.parentElement.classList.remove('open')" data-lang="en">Install</a>
@@ -415,6 +421,93 @@ body.lang-it div[data-lang="it"], body.lang-it p[data-lang="it"], body.lang-it l
 </section>
 
 <!-- ════════════════════════════════════════════════════════════════════ -->
+<!-- AI RECAP (NEW)                                                      -->
+<!-- ════════════════════════════════════════════════════════════════════ -->
+<section class="section" id="recap" style="background: radial-gradient(ellipse at 70% 40%, rgba(102,126,234,0.06) 0%, transparent 60%);">
+    <div class="section-badge badge-chat"><i data-lucide="sparkles" class="icon"></i> <span data-lang="en">New in 1.5</span><span data-lang="it">Nuovo in 1.5</span></div>
+
+    <h2 data-lang="en">AI Recap &mdash; the feature no one else has</h2>
+    <h2 data-lang="it">AI Recap &mdash; la feature che nessun altro ha</h2>
+
+    <p style="max-width:720px;margin:0 auto 24px;opacity:0.85;text-align:center;" data-lang="en">Ask <em>"what did Massimo do between Aug 14 and Aug 17?"</em> and get a structured technical narrative grouped by functional area &mdash; inferred by Claude from the code paths and commit messages of your monorepo. Slack, Linear, GitHub can't do this: they don't know that <code>DbPuma/finrisk/</code> is FinRisk. An LLM with your monorepo context does.</p>
+    <p style="max-width:720px;margin:0 auto 24px;opacity:0.85;text-align:center;" data-lang="it">Chiedi <em>"cosa ha fatto Massimo dal 14 al 17 agosto?"</em> e ricevi un narrativo tecnico raggruppato per area funzionale &mdash; dedotto da Claude dai path del codice e dai commit message del tuo monorepo. Slack, Linear, GitHub non lo fanno: non sanno che <code>DbPuma/finrisk/</code> &egrave; FinRisk. Un LLM con il contesto del tuo monorepo s&igrave;.</p>
+
+    <div class="card-grid" style="grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));">
+        <div class="card" style="text-align:center;">
+            <div class="card-icon" style="margin:0 auto 14px;background:linear-gradient(135deg,#667eea,#4facfe);"><i data-lucide="git-commit-horizontal" class="icon-lg"></i></div>
+            <h3 data-lang="en">Filter by author &amp; range</h3><h3 data-lang="it">Filtra per autore &amp; range</h3>
+            <p data-lang="en">Pick a teammate + date range. VibeSync runs <code>git log</code> on your repo.</p>
+            <p data-lang="it">Scegli collega + range di date. VibeSync lancia <code>git log</code> sul repo.</p>
+        </div>
+        <div class="card" style="text-align:center;">
+            <div class="card-icon" style="margin:0 auto 14px;background:linear-gradient(135deg,#f093fb,#667eea);"><i data-lucide="brain" class="icon-lg"></i></div>
+            <h3 data-lang="en">Grouped by functional area</h3><h3 data-lang="it">Raggruppato per area</h3>
+            <p data-lang="en">CoGe, FinRisk, UI, Auth&hellip; auto-inferred by Claude Sonnet from your paths.</p>
+            <p data-lang="it">CoGe, FinRisk, UI, Auth&hellip; dedotti da Claude Sonnet dai tuoi path.</p>
+        </div>
+        <div class="card" style="text-align:center;">
+            <div class="card-icon" style="margin:0 auto 14px;background:linear-gradient(135deg,#fa709a,#fee140);"><i data-lucide="alert-octagon" class="icon-lg"></i></div>
+            <h3 data-lang="en">Attention points</h3><h3 data-lang="it">Punti di attenzione</h3>
+            <p data-lang="en">Auto-flags risky changes: auth/middleware, SQL, migrations, deleted files.</p>
+            <p data-lang="it">Segnala automaticamente: modifiche auth/middleware, SQL, migration, file rimossi.</p>
+        </div>
+        <div class="card" style="text-align:center;">
+            <div class="card-icon green" style="margin:0 auto 14px;"><i data-lucide="save" class="icon-lg"></i></div>
+            <h3 data-lang="en">Save &amp; share</h3><h3 data-lang="it">Salva &amp; condividi</h3>
+            <p data-lang="en">Standalone HTML in <code>~/.vibesync/recaps/</code>. Cost: ~$0.02&ndash;0.05 with Sonnet.</p>
+            <p data-lang="it">HTML standalone in <code>~/.vibesync/recaps/</code>. Costo: ~$0.02&ndash;0.05 con Sonnet.</p>
+        </div>
+    </div>
+</section>
+
+<!-- ════════════════════════════════════════════════════════════════════ -->
+<!-- TELEGRAM NOTIFICATIONS (NEW)                                        -->
+<!-- ════════════════════════════════════════════════════════════════════ -->
+<section class="section" id="telegram" style="background: radial-gradient(ellipse at 30% 60%, rgba(79,172,254,0.05) 0%, transparent 60%);">
+    <div class="section-badge badge-sync"><i data-lucide="bell" class="icon"></i> <span data-lang="en">Team Awareness</span><span data-lang="it">Team Awareness</span></div>
+
+    <h2 data-lang="en">Telegram Notifications</h2>
+    <h2 data-lang="it">Notifiche Telegram</h2>
+
+    <p style="max-width:680px;margin:0 auto 24px;opacity:0.85;text-align:center;" data-lang="en">The moment you click "Release Selected" on the Sync Dashboard, your teammates get a Telegram message with author, branch and file list. No more <em>"did you push already?"</em> pings.</p>
+    <p style="max-width:680px;margin:0 auto 24px;opacity:0.85;text-align:center;" data-lang="it">Nel momento in cui clicchi "Rilascia Selezionati" sulla Sync Dashboard, i tuoi colleghi ricevono un messaggio Telegram con autore, branch e lista file. Basta con i <em>"hai gi&agrave; pushato?"</em>.</p>
+
+    <div class="card-grid" style="grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));">
+        <div class="card" style="text-align:center;">
+            <div class="card-icon" style="margin:0 auto 14px;background:linear-gradient(135deg,#4facfe,#00f2fe);"><i data-lucide="settings-2" class="icon-lg"></i></div>
+            <h3 data-lang="en">5-min setup</h3><h3 data-lang="it">Setup in 5 min</h3>
+            <p data-lang="en">Create a bot with <code>@BotFather</code>, each dev sends <code>/start</code>, done.</p>
+            <p data-lang="it">Crea un bot con <code>@BotFather</code>, ogni dev manda <code>/start</code>, fatto.</p>
+        </div>
+        <div class="card" style="text-align:center;">
+            <div class="card-icon" style="margin:0 auto 14px;background:linear-gradient(135deg,#4facfe,#00f2fe);"><i data-lucide="users" class="icon-lg"></i></div>
+            <h3 data-lang="en">Smart routing</h3><h3 data-lang="it">Routing intelligente</h3>
+            <p data-lang="en">Auto-skips the sender. Toggle <code>notify_self</code> to include yourself.</p>
+            <p data-lang="it">Auto-skip del mittente. Attiva <code>notify_self</code> per includerti.</p>
+        </div>
+        <div class="card" style="text-align:center;">
+            <div class="card-icon green" style="margin:0 auto 14px;"><i data-lucide="zap" class="icon-lg"></i></div>
+            <h3 data-lang="en">Zero infra</h3><h3 data-lang="it">Zero infrastruttura</h3>
+            <p data-lang="en">No servers, no webhooks. Free Telegram Bot API.</p>
+            <p data-lang="it">Niente server, niente webhook. Bot API Telegram gratuita.</p>
+        </div>
+    </div>
+</section>
+
+<!-- ════════════════════════════════════════════════════════════════════ -->
+<!-- VIBEBUDDY (NEW)                                                     -->
+<!-- ════════════════════════════════════════════════════════════════════ -->
+<section class="section" id="buddy" style="background: radial-gradient(ellipse at 50% 50%, rgba(240,147,251,0.05) 0%, transparent 60%);">
+    <div class="section-badge badge-chat"><i data-lucide="bot" class="icon"></i> <span data-lang="en">AI Companion</span><span data-lang="it">AI Companion</span></div>
+
+    <h2 data-lang="en">VibeBuddy</h2>
+    <h2 data-lang="it">VibeBuddy</h2>
+
+    <p style="max-width:680px;margin:0 auto 24px;opacity:0.85;text-align:center;" data-lang="en">An AI companion (Claude Haiku) inside VS Code that observes your coding session and narrates what's happening &mdash; files touched, patterns detected, welcome-back messages after inactivity. Adjustable verbosity: <em>quiet / normal / chatty</em>. Requires an Anthropic API key.</p>
+    <p style="max-width:680px;margin:0 auto 24px;opacity:0.85;text-align:center;" data-lang="it">Un AI companion (Claude Haiku) dentro VS Code che osserva la tua sessione di coding e narra cosa sta succedendo &mdash; file toccati, pattern rilevati, messaggi di bentornato dopo pause. Verbosit&agrave; configurabile: <em>quiet / normal / chatty</em>. Richiede una API key Anthropic.</p>
+</section>
+
+<!-- ════════════════════════════════════════════════════════════════════ -->
 <!-- COMPARISON TABLE                                                    -->
 <!-- ════════════════════════════════════════════════════════════════════ -->
 <section class="section" id="compare">
@@ -432,6 +525,9 @@ body.lang-it div[data-lang="it"], body.lang-it p[data-lang="it"], body.lang-it l
         <tr><td data-lang="en">File lock coordination</td><td data-lang="it">Coordinamento lock file</td><td class="cross">&times;</td><td class="check">&check; Auto via GitHub</td></tr>
         <tr><td data-lang="en">Conflict warnings</td><td data-lang="it">Avvisi conflitto</td><td class="cross">&times;</td><td class="check">&check; Real-time</td></tr>
         <tr><td data-lang="en">File sync to Git</td><td data-lang="it">Sync file nel repo Git</td><td class="cross">&times;</td><td class="check">&check; Visual dashboard</td></tr>
+        <tr><td data-lang="en"><strong>AI recap of teammate's commits</strong></td><td data-lang="it"><strong>Recap AI dei commit dei colleghi</strong></td><td class="cross">&times;</td><td class="check">&check; Grouped by area</td></tr>
+        <tr><td data-lang="en"><strong>Telegram alerts on release</strong></td><td data-lang="it"><strong>Alert Telegram al rilascio</strong></td><td class="cross">&times;</td><td class="check">&check; Bot to team</td></tr>
+        <tr><td data-lang="en"><strong>AI coding companion</strong></td><td data-lang="it"><strong>AI companion di coding</strong></td><td class="cross">&times;</td><td class="check">&check; VibeBuddy (Haiku)</td></tr>
         <tr><td data-lang="en">Multilingual UI</td><td data-lang="it">UI multilingua</td><td class="cross">&times;</td><td class="check">&check; EN / IT</td></tr>
     </table>
 </section>

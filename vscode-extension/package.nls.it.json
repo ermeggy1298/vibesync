@@ -1,6 +1,10 @@
 {
   "cmd.showQueue": "VibeSync: Mostra coda rilascio",
   "cmd.release": "VibeSync: Rilascia file selezionati",
+  "cmd.markReleased": "VibeSync: Marca file come gia' rilasciati",
+  "cmd.purgeReleased": "VibeSync: Pulisci coda rilasci",
+  "cmd.nextDiffChange": "VibeSync: Vai alla differenza successiva",
+  "cmd.prevDiffChange": "VibeSync: Vai alla differenza precedente",
   "cmd.forceUnlock": "VibeSync: Forza sblocco lock vecchi",
   "cmd.fetchNow": "VibeSync: Fetch da GitHub",
   "cmd.unlockMyFiles": "VibeSync: Rilascia tutti i miei lock manuali",

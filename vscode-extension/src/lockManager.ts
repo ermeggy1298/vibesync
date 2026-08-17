@@ -84,7 +84,20 @@ export interface ReleaseResult {
 // Config
 // ---------------------------------------------------------------------------
 
-interface VibesyncConfig {
+export interface TelegramRecipient {
+    name: string;
+    chat_id: string;
+}
+
+export interface NotificationsConfig {
+    telegram?: {
+        bot_token: string;
+        recipients: TelegramRecipient[];
+        notify_self?: boolean;
+    };
+}
+
+export interface VibesyncConfig {
     github_token: string;
     github_repo: string;
     github_branch: string;
@@ -94,6 +107,7 @@ interface VibesyncConfig {
     github_desktop_root: string;
     excluded_dirs?: string[];
     excluded_files?: string[];
+    notifications?: NotificationsConfig;
 }
 
 let cachedConfig: VibesyncConfig | null = null;
@@ -238,6 +252,15 @@ export async function releaseAllManualLocks(): Promise<LockActionResult> {
     }
 }
 
+export async function unlockSelectedLocks(files: string[]): Promise<LockActionResult> {
+    try {
+        const output = await runPythonScript(getLockScriptPath(), ['--unlock-list', ...files]);
+        return parseJsonOutput<LockActionResult>(output);
+    } catch (err: any) {
+        return { success: false, error: err.message };
+    }
+}
+
 // ---------------------------------------------------------------------------
 // Comandi Release
 // ---------------------------------------------------------------------------
@@ -266,6 +289,45 @@ export async function releaseFiles(files: string[]): Promise<ReleaseResult> {
         return parseJsonOutput<ReleaseResult>(output);
     } catch (err: any) {
         return { success: false, copied: [], errors: [{ file: '*', error: err.message }] };
+    }
+}
+
+export interface MarkReleasedResult {
+    success: boolean;
+    marked?: string[];
+    already_released?: string[];
+    not_found?: string[];
+    error?: string;
+}
+
+export async function markReleased(files: string[]): Promise<MarkReleasedResult> {
+    try {
+        const output = await runPythonScript(getReleaseScriptPath(), ['--mark-released', ...files]);
+        return parseJsonOutput<MarkReleasedResult>(output);
+    } catch (err: any) {
+        return { success: false, error: err.message };
+    }
+}
+
+export interface PurgeReleasedResult {
+    success: boolean;
+    purged_count?: number;
+    purged?: string[];
+    kept_count?: number;
+    older_than_days?: number;
+    error?: string;
+}
+
+export async function purgeReleased(olderThanDays: number = 0): Promise<PurgeReleasedResult> {
+    try {
+        const args = ['--purge-released'];
+        if (olderThanDays > 0) {
+            args.push('--older-than', String(olderThanDays));
+        }
+        const output = await runPythonScript(getReleaseScriptPath(), args);
+        return parseJsonOutput<PurgeReleasedResult>(output);
+    } catch (err: any) {
+        return { success: false, error: err.message };
     }
 }
 

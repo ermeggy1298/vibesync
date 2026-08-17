@@ -8,8 +8,51 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
 import { getLang } from './i18n';
+import { sendTestMessage } from './notificationsTelegram';
+import * as lockManager from './lockManager';
 
 const CONFIG_PATH = path.join(os.homedir(), '.vibesync', 'config.json');
+const CLAUDE_SETTINGS_PATH = path.join(os.homedir(), '.claude', 'settings.json');
+const CLAUDE_DEFAULT_RETENTION = 30;
+
+// Cartelle silenziosamente sempre escluse dallo scan (vedi vibesync_sync.py:36-39).
+// Se l'utente aggiunge una di queste come esclusione, la voce e' redundante ma non
+// pericolosa: il match ricorsivo e' esattamente il comportamento desiderato per
+// node_modules/__pycache__/etc. Non le trattiamo come "rischiose".
+const DEFAULT_EXCLUDED_DIRS = new Set([
+    '__pycache__', 'node_modules', '.git', '.next', 'dist', 'build',
+    '.venv', 'venv', 'env', '.env', '.tox', '.pytest_cache', '.mypy_cache',
+]);
+
+function getLocalRootTopFolders(localRoot: string): string[] {
+    try {
+        const entries = fs.readdirSync(localRoot, { withFileTypes: true });
+        return entries
+            .filter(e => e.isDirectory())
+            .map(e => e.name)
+            .filter(name => !name.startsWith('.') && !DEFAULT_EXCLUDED_DIRS.has(name.toLowerCase()));
+    } catch {
+        return [];
+    }
+}
+
+function isRiskyExclusion(name: string, topFoldersLower: Set<string>): boolean {
+    if (name.includes('/') || name.includes('\\')) { return false; }
+    return topFoldersLower.has(name.toLowerCase());
+}
+
+interface TelegramRecipient {
+    name: string;
+    chat_id: string;
+}
+
+interface NotificationsConfig {
+    telegram?: {
+        bot_token: string;
+        recipients: TelegramRecipient[];
+        notify_self?: boolean;
+    };
+}
 
 interface VibesyncConfig {
     github_token: string;
@@ -21,6 +64,29 @@ interface VibesyncConfig {
     github_desktop_root: string;
     excluded_dirs: string[];
     excluded_files?: string[];
+    notifications?: NotificationsConfig;
+}
+
+function loadClaudeRetention(): number {
+    try {
+        const raw = fs.readFileSync(CLAUDE_SETTINGS_PATH, 'utf-8');
+        const settings = JSON.parse(raw);
+        const v = settings.cleanupPeriodDays;
+        return typeof v === 'number' && v >= 1 ? v : CLAUDE_DEFAULT_RETENTION;
+    } catch {
+        return CLAUDE_DEFAULT_RETENTION;
+    }
+}
+
+function saveClaudeRetention(days: number): void {
+    let settings: Record<string, unknown> = {};
+    try {
+        const raw = fs.readFileSync(CLAUDE_SETTINGS_PATH, 'utf-8');
+        settings = JSON.parse(raw);
+    } catch { /* file mancante o JSON invalido: ripartiamo da {} */ }
+    settings.cleanupPeriodDays = days;
+    fs.mkdirSync(path.dirname(CLAUDE_SETTINGS_PATH), { recursive: true });
+    fs.writeFileSync(CLAUDE_SETTINGS_PATH, JSON.stringify(settings, null, 2), 'utf-8');
 }
 
 let currentPanel: vscode.WebviewPanel | undefined;
@@ -46,7 +112,7 @@ export function showConfigPanel(): void {
         return;
     }
 
-    currentPanel.webview.html = getConfigHtml(config);
+    currentPanel.webview.html = getConfigHtml(config, loadClaudeRetention(), getLocalRootTopFolders(config.local_root));
 
     currentPanel.webview.onDidReceiveMessage(async (msg) => {
         if (msg.command === 'save') {
@@ -55,10 +121,42 @@ export function showConfigPanel(): void {
                 const existing = loadConfig() || {};
                 const merged = { ...existing, ...msg.config };
                 fs.writeFileSync(CONFIG_PATH, JSON.stringify(merged, null, 2), 'utf-8');
+                lockManager.loadConfig();
                 vscode.window.showInformationMessage('VibeSync: configurazione salvata');
                 currentPanel!.webview.postMessage({ command: 'saved' });
             } catch (err: any) {
                 vscode.window.showErrorMessage(`VibeSync: errore salvataggio — ${err.message}`);
+            }
+        } else if (msg.command === 'testTelegram') {
+            try {
+                const existing = loadConfig() || {} as VibesyncConfig;
+                const merged: VibesyncConfig = {
+                    ...existing,
+                    notifications: {
+                        ...(existing.notifications || {}),
+                        telegram: {
+                            bot_token: msg.bot_token,
+                            recipients: msg.recipients,
+                            notify_self: msg.notify_self === true,
+                        },
+                    },
+                };
+                fs.writeFileSync(CONFIG_PATH, JSON.stringify(merged, null, 2), 'utf-8');
+                lockManager.loadConfig();
+                const result = await sendTestMessage();
+                currentPanel!.webview.postMessage({ command: 'telegramTestResult', result });
+                if (result.sent > 0 && result.failed.length === 0) {
+                    vscode.window.showInformationMessage(`VibeSync: test Telegram OK (${result.sent} dev)`);
+                } else if (result.sent > 0) {
+                    vscode.window.showWarningMessage(`VibeSync: test Telegram parziale — ${result.sent} OK, ${result.failed.length} falliti`);
+                } else if (result.skipped) {
+                    vscode.window.showWarningMessage(`VibeSync: test saltato — ${result.skipped}`);
+                } else {
+                    const detail = result.failed.map(f => `${f.name}: ${f.error}`).join('; ');
+                    vscode.window.showErrorMessage(`VibeSync: test Telegram fallito — ${detail}`);
+                }
+            } catch (err: any) {
+                vscode.window.showErrorMessage(`VibeSync: errore test Telegram — ${err.message}`);
             }
         } else if (msg.command === 'browseFolders') {
             const config = loadConfig();
@@ -85,6 +183,19 @@ export function showConfigPanel(): void {
             const choice = await vscode.window.showInformationMessage(reloadMsg, reloadLabel);
             if (choice === reloadLabel) {
                 vscode.commands.executeCommand('workbench.action.reloadWindow');
+            }
+        } else if (msg.command === 'saveClaudeRetention') {
+            const days = Number(msg.days);
+            if (!Number.isFinite(days) || days < 1 || !Number.isInteger(days)) {
+                vscode.window.showErrorMessage('VibeSync: retention deve essere un intero >= 1');
+                return;
+            }
+            try {
+                saveClaudeRetention(days);
+                vscode.window.showInformationMessage(`VibeSync: retention chat Claude Code impostata a ${days} giorni`);
+                currentPanel!.webview.postMessage({ command: 'claudeRetentionSaved', days });
+            } catch (err: any) {
+                vscode.window.showErrorMessage(`VibeSync: errore salvataggio retention — ${err.message}`);
             }
         } else if (msg.command === 'pickFolder') {
             const uri = await vscode.window.showOpenDialog({
@@ -129,13 +240,23 @@ body { font-family: var(--vscode-font-family, sans-serif); padding: 24px; color:
 </body></html>`;
 }
 
-function getConfigHtml(config: VibesyncConfig): string {
-    const excludedItems = config.excluded_dirs.map(d =>
-        `<div class="tag" data-dir="${escapeHtml(d)}">
+function getConfigHtml(config: VibesyncConfig, claudeRetention: number, localRootTopFolders: string[]): string {
+    const tg = config.notifications?.telegram;
+    const tgToken = tg?.bot_token ?? '';
+    const tgRecipients: TelegramRecipient[] = Array.isArray(tg?.recipients) ? tg!.recipients : [];
+    const tgNotifySelf = tg?.notify_self === true;
+    const topFoldersLower = new Set(localRootTopFolders.map(f => f.toLowerCase()));
+    const excludedItems = config.excluded_dirs.map(d => {
+        const risky = isRiskyExclusion(d, topFoldersLower);
+        const cls = risky ? 'tag risky' : 'tag';
+        const title = risky
+            ? `MATCH RICORSIVO: esclude qualsiasi cartella con questo nome a qualunque profondita'. Per escludere solo la top-level meglio scrivere "${d}/"`
+            : '';
+        return `<div class="${cls}" data-dir="${escapeHtml(d)}" title="${escapeHtml(title)}">
             <span class="tag-text">${escapeHtml(d)}</span>
             <button class="tag-remove" onclick="removeExclusion('${escapeHtml(d)}')" title="Rimuovi">&times;</button>
-        </div>`
-    ).join('');
+        </div>`;
+    }).join('');
 
     return `<!DOCTYPE html>
 <html><head>
@@ -193,6 +314,64 @@ input:focus { outline: none; border-color: var(--accent); }
 .tag-text { font-family: var(--vscode-editor-font-family, monospace); }
 .tag-remove { background: none; border: none; color: var(--danger); cursor: pointer; font-size: 16px; line-height: 1; padding: 0 2px; opacity: 0.6; }
 .tag-remove:hover { opacity: 1; }
+.tag.risky {
+    background: rgba(248, 81, 73, 0.15);
+    border-color: rgba(248, 81, 73, 0.55);
+    color: #ffb8b0;
+    cursor: help;
+}
+.tag.risky::before {
+    content: '\\26A0\\FE0F';
+    margin-right: 4px;
+    font-size: 11px;
+}
+.tag.risky .tag-remove { color: #ffb8b0; opacity: 0.8; }
+
+/* Modal per voci esclusioni rischiose */
+.modal-overlay {
+    position: fixed; inset: 0;
+    background: rgba(0, 0, 0, 0.65);
+    display: none;
+    align-items: center; justify-content: center;
+    z-index: 200;
+    backdrop-filter: blur(2px);
+}
+.modal-overlay.active { display: flex; }
+.modal-card {
+    background: var(--bg);
+    border: 1px solid var(--danger);
+    border-radius: 12px;
+    padding: 22px 24px;
+    max-width: 540px;
+    width: calc(100% - 40px);
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.6);
+    animation: modalIn 0.15s ease-out;
+}
+@keyframes modalIn { from { transform: scale(0.96); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+.modal-title {
+    color: var(--danger);
+    font-size: 15px;
+    font-weight: 700;
+    margin-bottom: 12px;
+    display: flex; align-items: center; gap: 8px;
+}
+.modal-body {
+    font-size: 13px;
+    line-height: 1.65;
+    margin-bottom: 18px;
+    color: var(--fg);
+}
+.modal-body code {
+    background: rgba(0, 0, 0, 0.4);
+    padding: 2px 7px;
+    border-radius: 4px;
+    font-family: var(--vscode-editor-font-family, monospace);
+    color: #ffb8b0;
+    font-size: 12px;
+}
+.modal-actions {
+    display: flex; gap: 8px; justify-content: flex-end; flex-wrap: wrap;
+}
 
 /* Add exclusion */
 .add-row { display: flex; gap: 6px; margin-bottom: 8px; }
@@ -285,7 +464,7 @@ input:focus { outline: none; border-color: var(--accent); }
 
 <div class="section">
     <div class="section-title">Cartelle Escluse</div>
-    <div class="field-hint" style="margin-bottom:10px">Queste cartelle vengono ignorate da lock, sync e release</div>
+    <div class="field-hint" style="margin-bottom:10px">Queste cartelle vengono ignorate da lock, sync e release. Le voci in rosso &#9888;&#65039; sono match ricorsivi che potrebbero non essere volute.</div>
 
     <div class="tags-container" id="tagsContainer">
         ${excludedItems}
@@ -299,6 +478,80 @@ input:focus { outline: none; border-color: var(--accent); }
     </div>
 </div>
 
+<div class="modal-overlay" id="riskyModal">
+    <div class="modal-card">
+        <div class="modal-title">&#9888;&#65039; Match ricorsivo — attenzione</div>
+        <div class="modal-body">
+            La voce <code id="riskyName"></code> corrisponde a una cartella di primo livello del tuo progetto,
+            ma senza slash <strong>esclude qualsiasi cartella con quel nome a qualunque profondit&agrave;</strong>.
+            Se hai una <code>Puma_backend/</code> a livello progetto e per sbaglio scrivi <code>Puma_backend</code>
+            senza slash, tutta la cartella scompare dallo scan.
+            <br><br>
+            Per escludere solo la cartella di primo livello, scrivi <code id="riskySuggested"></code> con lo slash finale.
+        </div>
+        <div class="modal-actions">
+            <button class="btn btn-primary" onclick="riskyChoose('slash')">Escludi solo top-level (raccomandato)</button>
+            <button class="btn" onclick="riskyChoose('as-is')">Escludi ricorsivo (come &egrave;)</button>
+            <button class="btn" onclick="riskyChoose('cancel')">Annulla</button>
+        </div>
+    </div>
+</div>
+
+<div class="section">
+    <div class="section-title">📱 Notifiche Telegram</div>
+    <div class="field-hint" style="margin-bottom:10px">
+        Manda un messaggio Telegram ai dev quando rilasci file su git dalla Sync Dashboard.
+        Setup: crea un bot con <code>@BotFather</code>, ottieni il <code>bot_token</code>;
+        ogni dev manda <code>/start</code> al bot e legge il proprio <code>chat_id</code>
+        (es. inoltrando un suo messaggio a <code>@userinfobot</code>).
+    </div>
+
+    <div class="field">
+        <div class="field-label">Bot token <span class="token-toggle" onclick="toggleTgToken()">[mostra/nascondi]</span></div>
+        <input type="password" id="tg_bot_token" value="${escapeHtml(tgToken)}" placeholder="123456:ABC-DEF..." />
+    </div>
+
+    <div class="field">
+        <div class="field-label">Destinatari</div>
+        <div class="field-hint">Nome dev (per skip auto-notifica) + chat_id Telegram</div>
+        <div id="tg_recipients" style="display:flex;flex-direction:column;gap:6px;margin-bottom:8px"></div>
+        <button class="btn btn-sm" onclick="addTgRecipient()">+ Aggiungi destinatario</button>
+    </div>
+
+    <div class="field">
+        <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:12px">
+            <input type="checkbox" id="tg_notify_self" ${tgNotifySelf ? 'checked' : ''} />
+            <span>Notifica anche me stesso (di default chi rilascia non riceve la notifica)</span>
+        </label>
+    </div>
+
+    <div class="field" style="display:flex;gap:8px;align-items:center">
+        <button class="btn btn-sm btn-primary" onclick="testTelegram()">Salva e invia test</button>
+        <span class="save-status" id="tgStatus"></span>
+    </div>
+</div>
+
+<div class="section">
+    <div class="section-title">Claude Code — Retention chat</div>
+    <div class="field-hint" style="margin-bottom:10px">
+        Giorni di conservazione delle conversazioni in <code>~/.claude/projects/</code>.
+        Default Claude Code: <strong>30</strong> giorni. Oltre questo limite le chat vengono cancellate al prossimo avvio.
+        Modifica il valore qui per evitare la perdita di chat vecchie.
+    </div>
+    <div class="field">
+        <div class="field-label">cleanupPeriodDays</div>
+        <div class="field-row">
+            <input type="number" id="claude_retention" value="${claudeRetention}" min="1" step="1" style="max-width:160px" />
+            <button class="btn btn-sm btn-primary" onclick="saveClaudeRetention()">Salva retention</button>
+            <span class="save-status" id="claudeRetentionStatus" style="margin-left:8px"></span>
+        </div>
+        <div class="field-hint" style="margin-top:6px">
+            Scritto in <code>${escapeHtml(path.join(os.homedir(), '.claude', 'settings.json'))}</code>.
+            Effetto al prossimo avvio di Claude Code.
+        </div>
+    </div>
+</div>
+
 <div class="save-bar">
     <button class="btn btn-primary" id="saveBtn" onclick="saveConfig()" disabled>Salva configurazione</button>
     <span class="save-status" id="saveStatus">Nessuna modifica</span>
@@ -309,6 +562,34 @@ const vscode = acquireVsCodeApi();
 let dirty = false;
 let excludedDirs = ${JSON.stringify(config.excluded_dirs)};
 let allFolders = [];
+const localRootTopFolders = new Set(${JSON.stringify(localRootTopFolders.map(f => f.toLowerCase()))});
+
+function isRisky(name) {
+    if (!name) return false;
+    if (name.indexOf('/') !== -1 || name.indexOf('\\\\') !== -1) return false;
+    return localRootTopFolders.has(name.toLowerCase());
+}
+
+let pendingRiskyOnConfirm = null;
+function showRiskyModal(name, onConfirm) {
+    pendingRiskyOnConfirm = onConfirm;
+    document.getElementById('riskyName').textContent = name;
+    document.getElementById('riskySuggested').textContent = name + '/';
+    document.getElementById('riskyModal').classList.add('active');
+}
+function riskyChoose(choice) {
+    const modal = document.getElementById('riskyModal');
+    const name = document.getElementById('riskyName').textContent;
+    modal.classList.remove('active');
+    const cb = pendingRiskyOnConfirm;
+    pendingRiskyOnConfirm = null;
+    if (choice === 'cancel' || !cb) return;
+    cb(choice === 'slash' ? (name + '/') : name);
+}
+function tryAddExclusion(name, onConfirm) {
+    if (isRisky(name)) { showRiskyModal(name, onConfirm); }
+    else { onConfirm(name); }
+}
 
 function changeLang(lang) {
     vscode.postMessage({ command: 'changeLang', lang });
@@ -333,37 +614,47 @@ function pickFolder(field) {
 
 function renderTags() {
     const container = document.getElementById('tagsContainer');
-    container.innerHTML = excludedDirs.map(d =>
-        '<div class="tag" data-dir="' + escapeHtml(d) + '">' +
-        '<span class="tag-text">' + escapeHtml(d) + '</span>' +
-        '<button class="tag-remove" onclick="removeExclusion(\\'' + escapeHtml(d) + '\\')" title="Rimuovi">&times;</button>' +
-        '</div>'
-    ).join('');
+    container.innerHTML = excludedDirs.map(d => {
+        const risky = isRisky(d);
+        const cls = risky ? 'tag risky' : 'tag';
+        const title = risky
+            ? 'MATCH RICORSIVO: esclude qualsiasi cartella con questo nome a qualunque profondita. Meglio scrivere "' + d + '/" per escludere solo la top-level.'
+            : '';
+        return '<div class="' + cls + '" data-dir="' + escapeHtml(d) + '" title="' + escapeHtml(title) + '">' +
+            '<span class="tag-text">' + escapeHtml(d) + '</span>' +
+            '<button class="tag-remove" onclick="removeExclusion(\\'' + escapeHtml(d) + '\\')" title="Rimuovi">&times;</button>' +
+            '</div>';
+    }).join('');
 }
 
 function addExclusion() {
     const input = document.getElementById('newExclusion');
     const name = input.value.trim();
     if (!name) return;
-    if (excludedDirs.some(d => d.toLowerCase() === name.toLowerCase())) {
+    tryAddExclusion(name, (finalName) => {
+        if (excludedDirs.some(d => d.toLowerCase() === finalName.toLowerCase())) {
+            input.value = '';
+            hideSuggestions();
+            return;
+        }
+        excludedDirs.push(finalName);
+        excludedDirs.sort((a, b) => a.toLowerCase().localeCompare(b.toLowerCase()));
+        renderTags();
         input.value = '';
-        return;
-    }
-    excludedDirs.push(name);
-    excludedDirs.sort((a, b) => a.toLowerCase().localeCompare(b.toLowerCase()));
-    renderTags();
-    input.value = '';
-    markDirty();
-    hideSuggestions();
+        markDirty();
+        hideSuggestions();
+    });
 }
 
 function addExclusionByName(name) {
-    if (excludedDirs.some(d => d.toLowerCase() === name.toLowerCase())) return;
-    excludedDirs.push(name);
-    excludedDirs.sort((a, b) => a.toLowerCase().localeCompare(b.toLowerCase()));
-    renderTags();
-    markDirty();
-    updateSuggestionDisplay();
+    tryAddExclusion(name, (finalName) => {
+        if (excludedDirs.some(d => d.toLowerCase() === finalName.toLowerCase())) return;
+        excludedDirs.push(finalName);
+        excludedDirs.sort((a, b) => a.toLowerCase().localeCompare(b.toLowerCase()));
+        renderTags();
+        markDirty();
+        updateSuggestionDisplay();
+    });
 }
 
 function removeExclusion(name) {
@@ -412,6 +703,80 @@ function updateSuggestionDisplay() {
     dropdown.classList.add('active');
 }
 
+let tgRecipients = ${JSON.stringify(tgRecipients)};
+
+function renderTgRecipients() {
+    const container = document.getElementById('tg_recipients');
+    if (tgRecipients.length === 0) {
+        container.innerHTML = '<div class="field-hint" style="opacity:0.4">Nessun destinatario configurato</div>';
+        return;
+    }
+    container.innerHTML = tgRecipients.map((r, i) =>
+        '<div style="display:flex;gap:6px;align-items:center">' +
+        '<input type="text" placeholder="Nome (es. Meggio)" value="' + escapeHtml(r.name) + '" oninput="updateTgRecipient(' + i + ', \\'name\\', this.value)" style="flex:0 0 180px" />' +
+        '<input type="text" placeholder="chat_id Telegram" value="' + escapeHtml(r.chat_id) + '" oninput="updateTgRecipient(' + i + ', \\'chat_id\\', this.value)" style="flex:1;font-family:monospace" />' +
+        '<button class="btn btn-sm btn-danger" onclick="removeTgRecipient(' + i + ')" title="Rimuovi">&times;</button>' +
+        '</div>'
+    ).join('');
+}
+
+function addTgRecipient() {
+    tgRecipients.push({ name: '', chat_id: '' });
+    renderTgRecipients();
+}
+
+function removeTgRecipient(i) {
+    tgRecipients.splice(i, 1);
+    renderTgRecipients();
+}
+
+function updateTgRecipient(i, field, value) {
+    if (tgRecipients[i]) { tgRecipients[i][field] = value; }
+}
+
+function toggleTgToken() {
+    const input = document.getElementById('tg_bot_token');
+    input.type = input.type === 'password' ? 'text' : 'password';
+}
+
+function testTelegram() {
+    const bot_token = document.getElementById('tg_bot_token').value.trim();
+    const notify_self = document.getElementById('tg_notify_self').checked;
+    const clean = tgRecipients
+        .map(r => ({ name: (r.name || '').trim(), chat_id: (r.chat_id || '').trim() }))
+        .filter(r => r.name && r.chat_id);
+
+    const status = document.getElementById('tgStatus');
+    if (!bot_token) {
+        status.textContent = 'Bot token mancante';
+        status.className = 'save-status';
+        return;
+    }
+    if (clean.length === 0) {
+        status.textContent = 'Nessun destinatario valido';
+        status.className = 'save-status';
+        return;
+    }
+
+    status.textContent = 'Invio test...';
+    status.className = 'save-status';
+    vscode.postMessage({ command: 'testTelegram', bot_token, recipients: clean, notify_self });
+}
+
+function saveClaudeRetention() {
+    const raw = document.getElementById('claude_retention').value;
+    const days = parseInt(raw, 10);
+    const status = document.getElementById('claudeRetentionStatus');
+    if (!Number.isInteger(days) || days < 1) {
+        status.textContent = 'Valore non valido';
+        status.className = 'save-status';
+        return;
+    }
+    status.textContent = 'Salvataggio...';
+    status.className = 'save-status';
+    vscode.postMessage({ command: 'saveClaudeRetention', days });
+}
+
 function saveConfig() {
     const config = {
         github_token: document.getElementById('github_token').value,
@@ -438,6 +803,9 @@ document.addEventListener('click', (e) => {
     }
 });
 
+// Init render lista destinatari Telegram
+renderTgRecipients();
+
 window.addEventListener('message', (e) => {
     const msg = e.data;
     if (msg.command === 'saved') {
@@ -445,6 +813,27 @@ window.addEventListener('message', (e) => {
         document.getElementById('saveBtn').disabled = true;
         document.getElementById('saveStatus').textContent = 'Salvato!';
         document.getElementById('saveStatus').className = 'save-status saved';
+    } else if (msg.command === 'claudeRetentionSaved') {
+        const status = document.getElementById('claudeRetentionStatus');
+        status.textContent = 'Salvato (' + msg.days + 'gg)';
+        status.className = 'save-status saved';
+    } else if (msg.command === 'telegramTestResult') {
+        const status = document.getElementById('tgStatus');
+        const r = msg.result || { sent: 0, failed: [], skipped: '' };
+        if (r.sent > 0 && (!r.failed || r.failed.length === 0)) {
+            status.textContent = 'Test OK (' + r.sent + ' dev)';
+            status.className = 'save-status saved';
+        } else if (r.sent > 0) {
+            status.textContent = r.sent + ' OK, ' + r.failed.length + ' falliti';
+            status.className = 'save-status';
+        } else if (r.skipped) {
+            status.textContent = 'Saltato: ' + r.skipped;
+            status.className = 'save-status';
+        } else {
+            const detail = (r.failed || []).map(f => f.name + ': ' + f.error).join('; ');
+            status.textContent = 'Errore: ' + (detail || 'unknown');
+            status.className = 'save-status';
+        }
     } else if (msg.command === 'folderPicked') {
         document.getElementById(msg.field).value = msg.value;
         markDirty();

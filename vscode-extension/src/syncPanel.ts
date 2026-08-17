@@ -10,6 +10,8 @@ import * as path from 'path';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as lockManager from './lockManager';
+import { notifyRelease } from './notificationsTelegram';
+import { ignorePathsFor } from './fileWatcher';
 import { t, getWebviewTranslations } from './i18n';
 
 const CONFIG_PATH = path.join(os.homedir(), '.vibesync', 'config.json');
@@ -19,7 +21,13 @@ interface ScanResult {
     identical_count: number;
     skipped_count: number;
     new_files: { file: string; directory: string; filename: string; size: number }[];
-    modified_files: { file: string; directory: string; filename: string; local_size: number; github_size: number; diff_bytes: number }[];
+    github_only_files: { file: string; directory: string; filename: string; size: number }[];
+    modified_files: {
+        file: string; directory: string; filename: string;
+        local_size: number; github_size: number; diff_bytes: number;
+        local_mtime: number; github_mtime: number;
+        which_newer: 'local' | 'github' | 'same';
+    }[];
     error?: string;
 }
 
@@ -30,6 +38,7 @@ interface CopyResult {
 }
 
 let currentPanel: vscode.WebviewPanel | undefined;
+let diffNavTipShown = false;
 
 export async function showSyncDashboard(): Promise<void> {
     if (currentPanel) {
@@ -79,8 +88,13 @@ export async function showSyncDashboard(): Promise<void> {
 
             currentPanel?.webview.postMessage({ command: 'copyResult', result });
 
+            // Flow completo "rilascia": dopo la copia, sblocca i lock e marca
+            // i file come released nella RELEASE_QUEUE.json. Riallineato con
+            // il flow "Rilascia File" della sidebar.
+            let unlocked = 0;
+            let markedInQueue = 0;
             if (result.copied.length > 0) {
-                let unlocked = 0;
+                // 1. Sblocca i lock (per ogni file)
                 for (const file of result.copied) {
                     try {
                         const unlockResult = await lockManager.releaseLock(file);
@@ -90,10 +104,65 @@ export async function showSyncDashboard(): Promise<void> {
                 if (unlocked > 0) {
                     await lockManager.fetchLocksFromGitHub();
                 }
+
+                // 2. Marca come released in RELEASE_QUEUE.json (idempotente:
+                //    file non presenti in coda vengono ignorati silenziosamente)
+                try {
+                    const markResult = await lockManager.markReleased(result.copied);
+                    markedInQueue = markResult.marked?.length ?? 0;
+                } catch { /* ignore */ }
             }
 
             if (result.success) {
-                vscode.window.showInformationMessage(t('sync.filesCopied', result.copied.length));
+                vscode.window.showInformationMessage(
+                    t('sync.filesReleased', result.copied.length, unlocked, markedInQueue)
+                );
+            } else {
+                vscode.window.showErrorMessage(t('sync.copyWithErrors', result.copied.length, result.errors.length));
+            }
+
+            if (result.copied.length > 0) {
+                const notif = await notifyRelease(result.copied);
+                if (notif.sent > 0) {
+                    vscode.window.showInformationMessage(`VibeSync: notifica Telegram inviata a ${notif.sent} dev`);
+                }
+                if (notif.failed.length > 0) {
+                    const detail = notif.failed.map(f => `${f.name}: ${f.error}`).join('; ');
+                    vscode.window.showWarningMessage(`VibeSync: notifica Telegram fallita per ${notif.failed.length} dev — ${detail}`);
+                }
+            }
+        } else if (msg.command === 'copyFromGit') {
+            const files: string[] = msg.files;
+            if (files.length === 0) {
+                vscode.window.showWarningMessage(t('sync.noFilesSelected'));
+                return;
+            }
+
+            const copyLabel = t('sync.copyFromGitLabel');
+            const confirm = await vscode.window.showWarningMessage(
+                t('sync.confirmCopyFromGit', files.length),
+                copyLabel,
+                t('ext.cancel')
+            );
+            if (confirm !== copyLabel) { return; }
+
+            currentPanel?.webview.postMessage({ command: 'copyingFromGit', count: files.length });
+
+            // Silenzia il FileSystemWatcher per i file che stiamo per sovrascrivere:
+            // altrimenti vedrebbe la copia come "modifica locale", acquisirebbe un
+            // lock manual e aggiungerebbe il file alla RELEASE_QUEUE (che è il bug
+            // che fa gonfiare la coda di "file da rilasciare").
+            const cfg = lockManager.getConfig();
+            if (cfg) {
+                const absPaths = files.map(f => path.join(cfg.local_root, f).replace(/\\/g, '/'));
+                ignorePathsFor(absPaths, 15000);
+            }
+
+            const result = await runCopyFromGit(files);
+            currentPanel?.webview.postMessage({ command: 'copyResult', result });
+
+            if (result.success) {
+                vscode.window.showInformationMessage(t('sync.filesCopiedFromGit', result.copied.length));
             } else {
                 vscode.window.showErrorMessage(t('sync.copyWithErrors', result.copied.length, result.errors.length));
             }
@@ -116,8 +185,14 @@ export async function showSyncDashboard(): Promise<void> {
             if (config) {
                 const localUri = vscode.Uri.file(path.join(config.local_root, msg.file));
                 const githubUri = vscode.Uri.file(path.join(config.github_desktop_root, msg.file));
-                vscode.commands.executeCommand('vscode.diff', localUri, githubUri,
+                await vscode.commands.executeCommand('vscode.diff', localUri, githubUri,
                     t('sync.diffTitle', msg.file));
+
+                // Mostra il tip una volta per sessione: come navigare le differenze.
+                if (!diffNavTipShown) {
+                    diffNavTipShown = true;
+                    vscode.window.showInformationMessage(t('sync.diffNavTip'));
+                }
             }
         } else if (msg.command === 'excludeFile') {
             addToConfig('excluded_files', msg.file);
@@ -151,10 +226,10 @@ function runScan(): Promise<ScanResult> {
         proc.stderr.on('data', (d: Buffer) => { stderr += d.toString(); });
         proc.on('close', () => {
             try { resolve(JSON.parse(stdout.trim())); }
-            catch { resolve({ success: false, identical_count: 0, skipped_count: 0, new_files: [], modified_files: [], error: stderr || 'Parsing error' }); }
+            catch { resolve({ success: false, identical_count: 0, skipped_count: 0, new_files: [], github_only_files: [], modified_files: [], error: stderr || 'Parsing error' }); }
         });
         proc.on('error', (err: Error) => {
-            resolve({ success: false, identical_count: 0, skipped_count: 0, new_files: [], modified_files: [], error: err.message });
+            resolve({ success: false, identical_count: 0, skipped_count: 0, new_files: [], github_only_files: [], modified_files: [], error: err.message });
         });
         setTimeout(() => { proc.kill(); }, 120000);
     });
@@ -163,6 +238,23 @@ function runScan(): Promise<ScanResult> {
 function runCopy(files: string[]): Promise<CopyResult> {
     return new Promise((resolve) => {
         const proc = cp.spawn(getPythonPath(), [getSyncScriptPath(), '--copy-files', ...files], { cwd: lockManager.getLocalRoot() || undefined });
+        let stdout = '', stderr = '';
+        proc.stdout.on('data', (d: Buffer) => { stdout += d.toString(); });
+        proc.stderr.on('data', (d: Buffer) => { stderr += d.toString(); });
+        proc.on('close', () => {
+            try { resolve(JSON.parse(stdout.trim())); }
+            catch { resolve({ success: false, copied: [], errors: [{ file: '*', error: stderr || 'Parsing error' }] }); }
+        });
+        proc.on('error', (err: Error) => {
+            resolve({ success: false, copied: [], errors: [{ file: '*', error: err.message }] });
+        });
+        setTimeout(() => { proc.kill(); }, 300000);
+    });
+}
+
+function runCopyFromGit(files: string[]): Promise<CopyResult> {
+    return new Promise((resolve) => {
+        const proc = cp.spawn(getPythonPath(), [getSyncScriptPath(), '--copy-from-git', ...files], { cwd: lockManager.getLocalRoot() || undefined });
         let stdout = '', stderr = '';
         proc.stdout.on('data', (d: Buffer) => { stdout += d.toString(); });
         proc.stderr.on('data', (d: Buffer) => { stderr += d.toString(); });
@@ -234,32 +326,49 @@ function formatSize(bytes: number): string {
 
 function getDashboardHtml(data: ScanResult): string {
     const T = getWebviewTranslations();
+
+    // Split modified files: locale piu' recente (verso git) vs git piu' recente (da git).
+    // I 'same' (mtime indeterminato) li metto verso git per default conservativo.
+    const modToGit = data.modified_files.filter(f => f.which_newer !== 'github');
+    const modFromGit = data.modified_files.filter(f => f.which_newer === 'github');
+
     const totalNew = data.new_files.length;
-    const totalMod = data.modified_files.length;
-    const totalFiles = totalNew + totalMod;
+    const totalGithubOnly = data.github_only_files.length;
+    const totalModToGit = modToGit.length;
+    const totalModFromGit = modFromGit.length;
+    const totalToGit = totalNew + totalModToGit;
+    const totalFromGit = totalGithubOnly + totalModFromGit;
+    const totalFiles = totalToGit + totalFromGit;
     const totalSize = data.new_files.reduce((s, f) => s + f.size, 0)
-        + data.modified_files.reduce((s, f) => s + f.local_size, 0);
+        + data.modified_files.reduce((s, f) => s + f.local_size, 0)
+        + data.github_only_files.reduce((s, f) => s + f.size, 0);
 
-    const newByDir = groupBy(data.new_files, f => f.directory);
-    const modByDir = groupBy(data.modified_files, f => f.directory);
-
-    let newSectionsHtml = '';
-    for (const dir of Object.keys(newByDir).sort()) {
-        const files = newByDir[dir];
-        newSectionsHtml += `
+    // Helper: produce HTML per una sezione (nuovi/modificati raggruppati per dir).
+    // dataType identifica univocamente il "lato" e l'azione (per filtri JS).
+    const renderNewSection = (
+        files: { file: string; directory: string; filename: string; size: number }[],
+        dataType: string,
+        iconClass: string,
+        iconChar: string,
+    ): string => {
+        const byDir = groupBy(files, f => f.directory);
+        let html = '';
+        for (const dir of Object.keys(byDir).sort()) {
+            const filesInDir = byDir[dir];
+            html += `
         <div class="dir-group">
             <div class="dir-header" onclick="toggleDir(this)">
                 <span class="arrow collapsed">&#9660;</span>
-                <input type="checkbox" class="dir-checkbox" data-dir="${escapeHtml(dir)}" data-type="new" onchange="toggleDirFiles(this)" checked />
+                <input type="checkbox" class="dir-checkbox" data-dir="${escapeHtml(dir)}" data-type="${dataType}" onchange="toggleDirFiles(this)" />
                 <span class="dir-name">${escapeHtml(dir)}</span>
-                <span class="dir-badge">${files.length}</span>
+                <span class="dir-badge">${filesInDir.length}</span>
                 ${dir !== '(root)' ? `<button class="btn-exclude-dir" onclick="excludeDir('${escapeJs(dir)}'); event.stopPropagation();" title="${T['sync.excludeFolder']}">&#10005;</button>` : ''}
             </div>
             <div class="dir-files hidden">
-                ${files.sort((a, b) => a.filename.localeCompare(b.filename)).map(f => `
+                ${filesInDir.sort((a, b) => a.filename.localeCompare(b.filename)).map(f => `
                 <label class="file-row" data-file="${escapeHtml(f.file)}">
-                    <input type="checkbox" class="file-checkbox" value="${escapeHtml(f.file)}" data-type="new" checked />
-                    <span class="file-icon new-icon">+</span>
+                    <input type="checkbox" class="file-checkbox" value="${escapeHtml(f.file)}" data-type="${dataType}" />
+                    <span class="file-icon ${iconClass}">${iconChar}</span>
                     <span class="file-name" title="${escapeHtml(f.file)}">${escapeHtml(f.filename)}</span>
                     <span class="file-size">${formatSize(f.size)}</span>
                     <button class="btn-open" onclick="openFile('${escapeJs(f.file)}'); event.preventDefault();" title="${T['sync.openFile']}">&#128269;</button>
@@ -267,29 +376,41 @@ function getDashboardHtml(data: ScanResult): string {
                 </label>`).join('')}
             </div>
         </div>`;
-    }
+        }
+        return html;
+    };
 
-    let modSectionsHtml = '';
-    for (const dir of Object.keys(modByDir).sort()) {
-        const files = modByDir[dir];
-        modSectionsHtml += `
+    const renderModSection = (
+        files: ScanResult['modified_files'],
+        dataType: string,
+        iconClass: string,
+        iconChar: string,
+    ): string => {
+        const byDir = groupBy(files, f => f.directory);
+        let html = '';
+        for (const dir of Object.keys(byDir).sort()) {
+            const filesInDir = byDir[dir];
+            html += `
         <div class="dir-group">
             <div class="dir-header" onclick="toggleDir(this)">
                 <span class="arrow collapsed">&#9660;</span>
-                <input type="checkbox" class="dir-checkbox" data-dir="${escapeHtml(dir)}" data-type="mod" onchange="toggleDirFiles(this)" checked />
+                <input type="checkbox" class="dir-checkbox" data-dir="${escapeHtml(dir)}" data-type="${dataType}" onchange="toggleDirFiles(this)" />
                 <span class="dir-name">${escapeHtml(dir)}</span>
-                <span class="dir-badge">${files.length}</span>
+                <span class="dir-badge">${filesInDir.length}</span>
                 ${dir !== '(root)' ? `<button class="btn-exclude-dir" onclick="excludeDir('${escapeJs(dir)}'); event.stopPropagation();" title="${T['sync.excludeFolder']}">&#10005;</button>` : ''}
             </div>
             <div class="dir-files hidden">
-                ${files.sort((a, b) => a.filename.localeCompare(b.filename)).map(f => {
+                ${filesInDir.sort((a, b) => a.filename.localeCompare(b.filename)).map(f => {
                     const arrow = f.diff_bytes >= 0 ? '+' : '';
+                    const sizeDisplay = dataType === 'mod-from-git'
+                        ? `${formatSize(f.local_size)} &#8592; ${formatSize(f.github_size)}`
+                        : `${formatSize(f.github_size)} &#8594; ${formatSize(f.local_size)}`;
                     return `
                 <label class="file-row" data-file="${escapeHtml(f.file)}">
-                    <input type="checkbox" class="file-checkbox" value="${escapeHtml(f.file)}" data-type="mod" checked />
-                    <span class="file-icon mod-icon">~</span>
+                    <input type="checkbox" class="file-checkbox" value="${escapeHtml(f.file)}" data-type="${dataType}" />
+                    <span class="file-icon ${iconClass}">${iconChar}</span>
                     <span class="file-name" title="${escapeHtml(f.file)}">${escapeHtml(f.filename)}</span>
-                    <span class="file-size">${formatSize(f.github_size)} &#8594; ${formatSize(f.local_size)}</span>
+                    <span class="file-size">${sizeDisplay}</span>
                     <span class="file-diff">${arrow}${f.diff_bytes} B</span>
                     <button class="btn-open" onclick="diffFile('${escapeJs(f.file)}'); event.preventDefault();" title="${T['sync.showDiff']}">&#128269;</button>
                     <button class="btn-exclude" onclick="excludeFile('${escapeJs(f.file)}'); event.preventDefault();" title="${T['sync.excludeFile']}">&#10005;</button>
@@ -297,7 +418,14 @@ function getDashboardHtml(data: ScanResult): string {
                 }).join('')}
             </div>
         </div>`;
-    }
+        }
+        return html;
+    };
+
+    const newSectionsHtml = renderNewSection(data.new_files, 'new', 'new-icon', '+');
+    const modToGitHtml = renderModSection(modToGit, 'mod-to-git', 'mod-icon', '~');
+    const modFromGitHtml = renderModSection(modFromGit, 'mod-from-git', 'mod-from-icon', '&#8592;');
+    const githubOnlyHtml = renderNewSection(data.github_only_files, 'github-only', 'github-only-icon', '&#8595;');
 
     return `<!DOCTYPE html>
 <html><head>
@@ -309,6 +437,7 @@ function getDashboardHtml(data: ScanResult): string {
     --accent: var(--vscode-focusBorder, #007acc);
     --badge-new: #2ea04370;
     --badge-mod: #d29922a0;
+    --badge-from-git: #4f8de6a0;
     --hover: var(--vscode-list-hoverBackground, #2a2d2e);
 }
 * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -334,6 +463,8 @@ body { font-family: var(--vscode-font-family, 'Segoe UI', sans-serif); font-size
 .section-badge { font-size: 11px; padding: 2px 8px; border-radius: 10px; font-weight: 600; }
 .new-badge { background: var(--badge-new); }
 .mod-badge { background: var(--badge-mod); }
+.from-git-badge { background: var(--badge-from-git); }
+.dir-meta { font-size: 10px; opacity: 0.55; margin-left: 8px; font-weight: normal; text-transform: uppercase; letter-spacing: 0.5px; }
 .dir-group { margin-bottom: 4px; border: 1px solid var(--border); border-radius: 4px; overflow: hidden; }
 .dir-header { display: flex; align-items: center; gap: 8px; padding: 6px 12px; cursor: pointer; background: var(--hover); user-select: none; }
 .dir-header:hover { opacity: 0.9; }
@@ -348,6 +479,8 @@ body { font-family: var(--vscode-font-family, 'Segoe UI', sans-serif); font-size
 .file-icon { width: 18px; height: 18px; border-radius: 3px; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 13px; flex-shrink: 0; }
 .new-icon { background: var(--badge-new); color: #3fb950; }
 .mod-icon { background: var(--badge-mod); color: #d29922; }
+.mod-from-icon { background: var(--badge-from-git); color: #79c0ff; }
+.github-only-icon { background: var(--badge-from-git); color: #79c0ff; }
 .file-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .file-size { font-size: 11px; opacity: 0.5; white-space: nowrap; }
 .file-diff { font-size: 11px; opacity: 0.5; white-space: nowrap; min-width: 70px; text-align: right; }
@@ -370,7 +503,8 @@ body { font-family: var(--vscode-font-family, 'Segoe UI', sans-serif); font-size
     <h1>${T['sync.title']}</h1>
     <div class="stats">
         <div class="stat"><div class="stat-value">${totalNew}</div><div class="stat-label">${T['sync.newFiles']}</div></div>
-        <div class="stat"><div class="stat-value">${totalMod}</div><div class="stat-label">${T['sync.modifiedFiles']}</div></div>
+        <div class="stat"><div class="stat-value">${totalModToGit + totalModFromGit}</div><div class="stat-label">${T['sync.modifiedFiles']}</div></div>
+        <div class="stat"><div class="stat-value">${totalGithubOnly}</div><div class="stat-label">${T['sync.githubOnlyFiles']}</div></div>
         <div class="stat"><div class="stat-value">${data.identical_count}</div><div class="stat-label">${T['sync.synced']}</div></div>
         <div class="stat"><div class="stat-value">${formatSize(totalSize)}</div><div class="stat-label">${T['sync.totalSize']}</div></div>
     </div>
@@ -379,24 +513,36 @@ body { font-family: var(--vscode-font-family, 'Segoe UI', sans-serif); font-size
 <div class="toolbar">
     <button class="btn btn-refresh" onclick="refresh()">${T['sync.rescan']}</button>
     <span class="toolbar-sep"></span>
-    <button class="btn" onclick="selectAll()">${T['sync.selectAll']}</button>
+    <button class="btn" onclick="selectAllToGit()">${T['sync.selectAllToGit']}</button>
+    <button class="btn" onclick="selectAllFromGit()">${T['sync.selectAllFromGit']}</button>
     <button class="btn" onclick="deselectAll()">${T['sync.deselectAll']}</button>
-    <button class="btn" onclick="selectNew()">${T['sync.newOnly']}</button>
-    <button class="btn" onclick="selectMod()">${T['sync.modifiedOnly']}</button>
-    <span class="selection-info" id="selectionInfo">${t('sync.filesSelected', totalFiles)}</span>
-    <button class="btn btn-primary" id="copyBtn" onclick="copySelected()">${t('sync.copySelected', totalFiles)}</button>
+    <span class="selection-info" id="selectionInfo">${t('sync.filesSelectedSplit', 0, 0)}</span>
+    <button class="btn btn-primary" id="copyBtn" onclick="releaseSelected()" disabled>${t('sync.copySelected', 0)}</button>
+    <button class="btn btn-primary" id="copyFromGitBtn" onclick="copyFromGitSelected()" disabled>${t('sync.copyFromGitBtn', 0)}</button>
 </div>
 
 ${totalNew > 0 ? `
 <div class="section">
-    <div class="section-title">${T['sync.newFilesSection']} <span class="section-badge new-badge">${totalNew}</span></div>
+    <div class="section-title">${T['sync.newFilesSection']} <span class="section-badge new-badge">${totalNew}</span> <span class="dir-meta">${T['sync.directionToGit']}</span></div>
     ${newSectionsHtml}
 </div>` : ''}
 
-${totalMod > 0 ? `
+${totalModToGit > 0 ? `
 <div class="section">
-    <div class="section-title">${T['sync.modifiedFilesSection']} <span class="section-badge mod-badge">${totalMod}</span></div>
-    ${modSectionsHtml}
+    <div class="section-title">${T['sync.modifiedToGitSection']} <span class="section-badge mod-badge">${totalModToGit}</span> <span class="dir-meta">${T['sync.directionToGit']}</span></div>
+    ${modToGitHtml}
+</div>` : ''}
+
+${totalModFromGit > 0 ? `
+<div class="section">
+    <div class="section-title">${T['sync.modifiedFromGitSection']} <span class="section-badge from-git-badge">${totalModFromGit}</span> <span class="dir-meta">${T['sync.directionFromGit']}</span></div>
+    ${modFromGitHtml}
+</div>` : ''}
+
+${totalGithubOnly > 0 ? `
+<div class="section">
+    <div class="section-title">${T['sync.githubOnlySection']} <span class="section-badge from-git-badge">${totalGithubOnly}</span> <span class="dir-meta">${T['sync.directionFromGit']}</span></div>
+    ${githubOnlyHtml}
 </div>` : ''}
 
 ${totalFiles === 0 ? `<div class="empty">${T['sync.allSynced']}</div>` : ''}
@@ -415,22 +561,50 @@ function tr(key, ...args) {
     return s;
 }
 
-function getCheckedFiles() {
-    return [...document.querySelectorAll('.file-checkbox:checked')].map(cb => cb.value);
+// Tipi 'verso git' (rilascio): new, mod-to-git
+// Tipi 'da git' (copia da git): mod-from-git, github-only
+const TO_GIT_TYPES = ['new', 'mod-to-git'];
+const FROM_GIT_TYPES = ['mod-from-git', 'github-only'];
+
+function getCheckedFilesToGit() {
+    return [...document.querySelectorAll('.file-checkbox:checked')]
+        .filter(cb => TO_GIT_TYPES.includes(cb.dataset.type))
+        .map(cb => cb.value);
+}
+
+function getCheckedFilesFromGit() {
+    return [...document.querySelectorAll('.file-checkbox:checked')]
+        .filter(cb => FROM_GIT_TYPES.includes(cb.dataset.type))
+        .map(cb => cb.value);
 }
 
 function updateSelectionInfo() {
-    const checked = getCheckedFiles();
-    document.getElementById('selectionInfo').textContent = tr('sync.filesSelected', checked.length);
-    const btn = document.getElementById('copyBtn');
-    btn.textContent = tr('sync.copySelected', checked.length);
-    btn.disabled = checked.length === 0;
+    const toGit = getCheckedFilesToGit();
+    const fromGit = getCheckedFilesFromGit();
+    document.getElementById('selectionInfo').textContent = tr('sync.filesSelectedSplit', toGit.length, fromGit.length);
+
+    const releaseBtn = document.getElementById('copyBtn');
+    releaseBtn.textContent = tr('sync.copySelected', toGit.length);
+    releaseBtn.disabled = toGit.length === 0;
+
+    const fromGitBtn = document.getElementById('copyFromGitBtn');
+    fromGitBtn.textContent = tr('sync.copyFromGitBtn', fromGit.length);
+    fromGitBtn.disabled = fromGit.length === 0;
 }
 
-function selectAll() { document.querySelectorAll('.file-checkbox, .dir-checkbox').forEach(cb => cb.checked = true); updateSelectionInfo(); }
+function selectByTypes(types) {
+    document.querySelectorAll('.file-checkbox').forEach(cb => {
+        if (types.includes(cb.dataset.type)) { cb.checked = true; }
+    });
+    document.querySelectorAll('.dir-checkbox').forEach(cb => {
+        if (types.includes(cb.dataset.type)) { cb.checked = true; }
+    });
+    updateSelectionInfo();
+}
+
+function selectAllToGit() { selectByTypes(TO_GIT_TYPES); }
+function selectAllFromGit() { selectByTypes(FROM_GIT_TYPES); }
 function deselectAll() { document.querySelectorAll('.file-checkbox, .dir-checkbox').forEach(cb => cb.checked = false); updateSelectionInfo(); }
-function selectNew() { document.querySelectorAll('.file-checkbox').forEach(cb => { cb.checked = cb.dataset.type === 'new'; }); document.querySelectorAll('.dir-checkbox').forEach(cb => { cb.checked = cb.dataset.type === 'new'; }); updateSelectionInfo(); }
-function selectMod() { document.querySelectorAll('.file-checkbox').forEach(cb => { cb.checked = cb.dataset.type === 'mod'; }); document.querySelectorAll('.dir-checkbox').forEach(cb => { cb.checked = cb.dataset.type === 'mod'; }); updateSelectionInfo(); }
 
 function toggleDir(header) { const files = header.nextElementSibling; const arrow = header.querySelector('.arrow'); files.classList.toggle('hidden'); arrow.classList.toggle('collapsed'); }
 function toggleDirFiles(dirCb) { const filesDiv = dirCb.closest('.dir-header').nextElementSibling; filesDiv.querySelectorAll('.file-checkbox').forEach(cb => { cb.checked = dirCb.checked; }); updateSelectionInfo(); event.stopPropagation(); }
@@ -451,7 +625,8 @@ document.addEventListener('change', (e) => {
     }
 });
 
-function copySelected() { const files = getCheckedFiles(); if (files.length === 0) return; vscode.postMessage({ command: 'copy', files }); }
+function releaseSelected() { const files = getCheckedFilesToGit(); if (files.length === 0) return; vscode.postMessage({ command: 'copy', files }); }
+function copyFromGitSelected() { const files = getCheckedFilesFromGit(); if (files.length === 0) return; vscode.postMessage({ command: 'copyFromGit', files }); }
 function refresh() { vscode.postMessage({ command: 'refresh' }); }
 function openFile(file) { vscode.postMessage({ command: 'openFile', file }); }
 function diffFile(file) { vscode.postMessage({ command: 'diffFile', file }); }
@@ -463,6 +638,9 @@ window.addEventListener('message', (e) => {
     if (msg.command === 'copying') {
         document.getElementById('overlay').classList.add('active');
         document.getElementById('overlayText').textContent = tr('sync.copyingN', msg.count);
+    } else if (msg.command === 'copyingFromGit') {
+        document.getElementById('overlay').classList.add('active');
+        document.getElementById('overlayText').textContent = tr('sync.copyingFromGitN', msg.count);
     } else if (msg.command === 'excluded') {
         if (msg.type === 'file') {
             const row = document.querySelector('.file-row[data-file="' + CSS.escape(msg.value) + '"]');
