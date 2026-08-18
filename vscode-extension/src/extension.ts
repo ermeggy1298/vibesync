@@ -18,6 +18,8 @@ import { BuddyViewProvider, showBuddyPanel } from './buddyPanel';
 import { testBuddy } from './buddyEngine';
 import { showSearchPanel } from './searchPanel';
 import { showRecapPanel } from './recapPanel';
+import { showChatPanel, initChatBackground, prefillWithAnchor } from './chatPanel';
+import { hashSnippet } from './chatTelegram';
 import { MyLocksProvider, OtherLocksProvider, ReleaseQueueProvider } from './treeViewProvider';
 import { ActionsProvider } from './actionsProvider';
 import { initLang, t } from './i18n';
@@ -49,6 +51,54 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         vscode.commands.registerCommand('vibesync.showBuddy', () => showBuddyPanel(context)),
         vscode.commands.registerCommand('vibesync.testBuddy', () => testBuddy()),
         vscode.commands.registerCommand('vibesync.showRecap', () => showRecapPanel()),
+        vscode.commands.registerCommand('vibesync.openChat', () => showChatPanel(context)),
+        vscode.commands.registerCommand('vibesync.chatSelection', () => {
+            // "Chatta selezione": prende selezione attiva nell'editor, calcola
+            // l'anchor relativa al local_root del workspace VibeSync, apre il
+            // chat panel con quell'anchor precompilata nell'input.
+            const editor = vscode.window.activeTextEditor;
+            if (!editor) {
+                vscode.window.showWarningMessage('VibeSync Chat: nessun editor attivo.');
+                return;
+            }
+            const cfg = lockManager.getConfig();
+            if (!cfg?.local_root) {
+                vscode.window.showWarningMessage('VibeSync Chat: local_root non configurato.');
+                return;
+            }
+            const filePath = editor.document.uri.fsPath.replace(/\\/g, '/');
+            const rootNorm = cfg.local_root.replace(/\\/g, '/').replace(/\/$/, '');
+            // Case-insensitive match su Windows (drive letter puo' variare)
+            const isWin = process.platform === 'win32';
+            const filePathCmp = isWin ? filePath.toLowerCase() : filePath;
+            const rootCmp = isWin ? rootNorm.toLowerCase() : rootNorm;
+            if (!filePathCmp.startsWith(rootCmp + '/')) {
+                vscode.window.showWarningMessage(`VibeSync Chat: il file non e' dentro local_root (${rootNorm}).`);
+                return;
+            }
+            const relPath = filePath.slice(rootNorm.length + 1);
+            const start = editor.selection.start.line + 1;
+            const end = editor.selection.end.line + 1;
+
+            // Iter 2: cattura snippet con ±3 righe di contesto e SHA-1 per il
+            // detect di "codice cambiato" al click. Limite: 8 righe totali max
+            // per contenere la dimensione del payload Telegram (max 4096 char).
+            const doc = editor.document;
+            const CONTEXT = 3;
+            const MAX_LINES = 8;
+            const rawFrom = Math.max(0, start - 1 - CONTEXT);
+            const rawTo = Math.min(doc.lineCount - 1, end - 1 + CONTEXT);
+            const capTo = Math.min(rawTo, rawFrom + MAX_LINES - 1);
+            const snippet = doc.getText(new vscode.Range(
+                new vscode.Position(rawFrom, 0),
+                new vscode.Position(capTo, Number.MAX_SAFE_INTEGER),
+            ));
+            const hash = hashSnippet(snippet);
+
+            const anchor: any = { file: relPath, start, snippet, hash };
+            if (start !== end) { anchor.end = end; }
+            prefillWithAnchor(context, anchor);
+        }),
         // Diff navigation (delegano ai comandi built-in di VS Code; aggiungono solo
         // un alias coerente, keybindings F7/Shift+F7 e bottoni nella title bar).
         vscode.commands.registerCommand('vibesync.nextDiffChange', async () => {
@@ -169,6 +219,10 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 
     pollingInterval = setInterval(() => pollLocks(), intervalSec * 1000);
     context.subscriptions.push({ dispose: () => clearInterval(pollingInterval!) });
+
+    // 10. Chat background — avvia long polling Telegram se configurato.
+    // Cosi' ricevi i messaggi anche se il panel chat e' chiuso: notifica toast + persistenza.
+    initChatBackground();
 }
 
 // ---------------------------------------------------------------------------

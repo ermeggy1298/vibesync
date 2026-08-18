@@ -19,6 +19,7 @@
   <a href="#-file-locking">File Locking</a> •
   <a href="#-sync-dashboard">Sync Dashboard</a> •
   <a href="#-ai-recap-new">AI Recap</a> •
+  <a href="#-team-chat-with-code-anchors-new">Team Chat</a> •
   <a href="#-telegram-notifications-new">Telegram</a> •
   <a href="#-vibebuddy-new">VibeBuddy</a> •
   <a href="#-documentation">Docs</a>
@@ -81,6 +82,19 @@ Visual file sync between your workspace and Git repo:
 - Typical cost: ~$0.02–0.05 per recap with Sonnet, ~$0.004 with Haiku
 
 Why it's killer: Slack/Linear/GitHub are generalist — they don't know that `DbPuma/finrisk/` is FinRisk and `ui/src/components/CrCheck/` is CrCheck. An LLM with your monorepo context does, and describes the work in your team's language.
+
+### 💬 Team Chat with code anchors (NEW)
+
+Chat with your teammate **inside VS Code**, and every message can carry a **clickable anchor** to a specific file+line — with a code snippet preview and a warning if the code has changed since the anchor was made.
+
+- **Right-click on any selection** in the editor → *"VibeSync: Chatta selezione"* → the chat opens with the anchor pre-loaded (`views.py:245-260`), snippet captured
+- Send the message → your teammate sees a chip 📄 they click to jump to that exact line in split view
+- **"Code changed" detection** — VibeSync captures a SHA-1 of the snippet at send time. At click time, it recomputes on the current version: if it doesn't match, a warning surfaces (*"the code at views.py:245 has changed since the anchor was created"*). No more stale references.
+- **Auto-anchor on release** — when you click "Release Selected" in the Sync Dashboard, a system message appears in the chat with a clickable chip for each released file
+- **Works even from mobile** — if your teammate replies from the Telegram app with plain text like *"look at views.py:245"*, VibeSync auto-detects the pattern and renders it as a clickable chip anyway
+- **Zero extra setup** — reuses the same Telegram bot you already configured for release notifications. Long-poll every ~25s in idle (near-zero bandwidth).
+
+Why it beats generalist tools like Slack: Slack knows about text and links. It doesn't know that `views.py:245` is a live pointer into your working copy. VibeSync does — and turns every teammate exchange into a two-way navigable reference.
 
 ### 📱 Telegram Notifications (NEW)
 
@@ -146,6 +160,7 @@ If you prefer to configure manually, see [`config.example.json`](config.example.
 | Conflict warnings | ❌ | ✅ Real-time |
 | File sync to Git | ❌ | ✅ Visual dashboard |
 | **AI recap of teammate's commits** | ❌ | ✅ Grouped by area |
+| **Team chat with clickable file:line anchors** | ❌ | ✅ With snippet + change detection |
 | **Telegram alerts on release** | ❌ | ✅ Bot to team |
 | **AI coding companion** | ❌ | ✅ VibeBuddy (Haiku) |
 | Multilingual UI | ❌ | ✅ EN / IT |
@@ -215,6 +230,7 @@ Se usi **Claude Code** in VS Code, conosci il problema:
 - **🔒 File Locking** — Lock automatici via GitHub API, sidebar real-time, avvisi conflitto, pulizia lock scaduti
 - **📊 Sync Dashboard** — Confronto visuale workspace/repo, diff inline, copia selettiva, esclusioni
 - **✨ AI Recap** (NUOVO) — Chiedi *"cosa ha fatto Massimo dal 14 al 17 agosto"* e ricevi un narrativo tecnico raggruppato per area funzionale (CoGe, FinRisk, UI, Auth…). Interroga `git log` per autore/date e passa il diff a Claude Sonnet, che deduce le aree dai path del monorepo. HTML salvabile su disco.
+- **💬 Chat team con ancore al codice** (NUOVO) — Chat 1-a-1 dentro VS Code dove ogni messaggio può portare un chip `file:line` cliccabile che apre il file esatto in split view. Tasto destro sulla selezione → "Chatta selezione" → l'ancora si precarica con snippet. Al click, se il codice è cambiato dal momento del send, banner ⚠ ("il codice è cambiato dalle 14:20"). Riusa lo stesso bot Telegram delle notifiche.
 - **📱 Notifiche Telegram** (NUOVO) — Bot che avvisa il team al momento del rilascio dalla Sync Dashboard. Setup di 5 minuti con `@BotFather` + `chat_id` per dev. Skip auto-notifica al mittente.
 - **🤖 VibeBuddy** (NUOVO) — AI companion (Claude Haiku) dentro VS Code che commenta la tua sessione di coding, con verbosità configurabile
 - **🌐 Multilingua** — Toggle EN/IT nelle impostazioni

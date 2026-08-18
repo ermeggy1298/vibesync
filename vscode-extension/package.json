@@ -1,8 +1,8 @@
 {
   "name": "vibesync",
   "displayName": "VibeSync",
-  "description": "AI-aware file coordination for vibe coding teams” by AReS-BI",
-  "version": "1.5.0",
+  "description": "AI-aware file coordination for vibe coding teamsï¿½ by AReS-BI",
+  "version": "1.6.0",
   "publisher": "aresbi",
   "repository": {
     "type": "git",
@@ -81,6 +81,14 @@
         "title": "VibeSync: Recap AI (commit di un dev)"
       },
       {
+        "command": "vibesync.openChat",
+        "title": "VibeSync: Chat team"
+      },
+      {
+        "command": "vibesync.chatSelection",
+        "title": "VibeSync: Chatta selezione"
+      },
+      {
         "command": "vibesync.nextDiffChange",
         "title": "%cmd.nextDiffChange%",
         "icon": "$(arrow-down)"
@@ -114,6 +122,13 @@
           "command": "vibesync.nextDiffChange",
           "group": "navigation@11",
           "when": "inDiffEditor"
+        }
+      ],
+      "editor/context": [
+        {
+          "command": "vibesync.chatSelection",
+          "group": "1_modification@99",
+          "when": "editorTextFocus"
         }
       ]
     },

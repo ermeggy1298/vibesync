@@ -209,6 +209,7 @@ body.lang-it div[data-lang="it"], body.lang-it p[data-lang="it"], body.lang-it l
         <a href="#lock" data-lang="en">Locking</a><a href="#lock" data-lang="it">Locking</a>
         <a href="#sync">Sync</a>
         <a href="#recap">Recap AI</a>
+        <a href="#teamchat" data-lang="en">Team Chat</a><a href="#teamchat" data-lang="it">Chat</a>
         <a href="#telegram">Telegram</a>
         <a href="#buddy">Buddy</a>
         <a href="#compare" data-lang="en">Compare</a><a href="#compare" data-lang="it">Confronto</a>
@@ -230,6 +231,7 @@ body.lang-it div[data-lang="it"], body.lang-it p[data-lang="it"], body.lang-it l
     <a href="#lock" onclick="this.parentElement.classList.remove('open')">Locking</a>
     <a href="#sync" onclick="this.parentElement.classList.remove('open')">Sync</a>
     <a href="#recap" onclick="this.parentElement.classList.remove('open')">Recap AI</a>
+    <a href="#teamchat" onclick="this.parentElement.classList.remove('open')">Team Chat</a>
     <a href="#telegram" onclick="this.parentElement.classList.remove('open')">Telegram</a>
     <a href="#buddy" onclick="this.parentElement.classList.remove('open')">VibeBuddy</a>
     <a href="#compare" onclick="this.parentElement.classList.remove('open')" data-lang="en">Compare</a>
@@ -468,6 +470,58 @@ body.lang-it div[data-lang="it"], body.lang-it p[data-lang="it"], body.lang-it l
 </section>
 
 <!-- ════════════════════════════════════════════════════════════════════ -->
+<!-- TEAM CHAT WITH ANCHORS (NEW)                                        -->
+<!-- ════════════════════════════════════════════════════════════════════ -->
+<section class="section" id="teamchat" style="background: radial-gradient(ellipse at 40% 50%, rgba(240,147,251,0.06) 0%, transparent 60%);">
+    <div class="section-badge badge-chat"><i data-lucide="message-square-code" class="icon"></i> <span data-lang="en">New in 1.6</span><span data-lang="it">Nuovo in 1.6</span></div>
+
+    <h2 data-lang="en">Team Chat &mdash; every message can point to code</h2>
+    <h2 data-lang="it">Chat team &mdash; ogni messaggio pu&ograve; puntare al codice</h2>
+
+    <p style="max-width:720px;margin:0 auto 24px;opacity:0.85;text-align:center;" data-lang="en">Slack knows about text and links. It doesn't know that <code>views.py:245</code> is a live pointer into your working copy. VibeSync does: right-click a selection &rarr; <em>"Chatta selezione"</em> &rarr; a clickable chip is pre-loaded in the chat. Your teammate clicks it and jumps to that exact line in split view. And if the code has changed since the anchor was made, a warning surfaces automatically.</p>
+    <p style="max-width:720px;margin:0 auto 24px;opacity:0.85;text-align:center;" data-lang="it">Slack conosce testo e link. Non sa che <code>views.py:245</code> &egrave; un puntatore vivo nella tua working copy. VibeSync s&igrave;: tasto destro su una selezione &rarr; <em>"Chatta selezione"</em> &rarr; un chip cliccabile si pre-carica nella chat. Il tuo collega clicca e apre esattamente quella riga in split view. E se il codice &egrave; cambiato dal momento del send, appare un warning automatico.</p>
+
+    <div class="card-grid" style="grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));">
+        <div class="card" style="text-align:center;">
+            <div class="card-icon" style="margin:0 auto 14px;background:linear-gradient(135deg,#f093fb,#667eea);"><i data-lucide="mouse-pointer-click" class="icon-lg"></i></div>
+            <h3 data-lang="en">Clickable file:line chips</h3><h3 data-lang="it">Chip file:line cliccabili</h3>
+            <p data-lang="en">Every message can carry anchors. Click &rarr; opens file at the exact range in split view.</p>
+            <p data-lang="it">Ogni messaggio pu&ograve; portare ancore. Click &rarr; apre il file al range esatto in split view.</p>
+        </div>
+        <div class="card" style="text-align:center;">
+            <div class="card-icon" style="margin:0 auto 14px;background:linear-gradient(135deg,#4facfe,#00f2fe)"><i data-lucide="scan-line" class="icon-lg"></i></div>
+            <h3 data-lang="en">Snippet preview inline</h3><h3 data-lang="it">Snippet preview inline</h3>
+            <p data-lang="en">The code around your selection is captured and shown right in the message. Full context, zero copy-paste.</p>
+            <p data-lang="it">Il codice attorno alla selezione &egrave; catturato e mostrato dentro il messaggio. Contesto completo, zero copia-incolla.</p>
+        </div>
+        <div class="card" style="text-align:center;">
+            <div class="card-icon" style="margin:0 auto 14px;background:linear-gradient(135deg,#fa709a,#fee140)"><i data-lucide="alert-triangle" class="icon-lg"></i></div>
+            <h3 data-lang="en">"Code changed" detection</h3><h3 data-lang="it">Detect "codice cambiato"</h3>
+            <p data-lang="en">SHA-1 of the snippet at send time. At click time, if the current code doesn't match &rarr; warning banner.</p>
+            <p data-lang="it">SHA-1 dello snippet al momento del send. Al click, se il codice attuale non matcha &rarr; banner di warning.</p>
+        </div>
+        <div class="card" style="text-align:center;">
+            <div class="card-icon" style="margin:0 auto 14px;background:linear-gradient(135deg,#2dd4bf,#14b8a6)"><i data-lucide="zap" class="icon-lg"></i></div>
+            <h3 data-lang="en">Auto-anchor on release</h3><h3 data-lang="it">Auto-anchor sul rilascio</h3>
+            <p data-lang="en">Every "Release Selected" also drops a system message in the chat with clickable chips for each file.</p>
+            <p data-lang="it">Ogni "Rilascia Selezionati" scrive anche un messaggio system in chat con chip cliccabili per ogni file.</p>
+        </div>
+        <div class="card" style="text-align:center;">
+            <div class="card-icon" style="margin:0 auto 14px;background:linear-gradient(135deg,#667eea,#4facfe)"><i data-lucide="smartphone" class="icon-lg"></i></div>
+            <h3 data-lang="en">Works from mobile too</h3><h3 data-lang="it">Funziona anche da mobile</h3>
+            <p data-lang="en">Your teammate replies from the Telegram app with plain text like <code>views.py:245</code>? VibeSync auto-detects the pattern and turns it into a chip.</p>
+            <p data-lang="it">Il collega risponde dall'app Telegram con testo tipo <code>views.py:245</code>? VibeSync auto-rileva il pattern e lo trasforma in chip.</p>
+        </div>
+        <div class="card" style="text-align:center;">
+            <div class="card-icon green" style="margin:0 auto 14px;"><i data-lucide="package" class="icon-lg"></i></div>
+            <h3 data-lang="en">Zero extra setup</h3><h3 data-lang="it">Zero setup aggiuntivo</h3>
+            <p data-lang="en">Reuses the same Telegram bot from release notifications. Long-poll ~25s, near-zero bandwidth in idle.</p>
+            <p data-lang="it">Riusa lo stesso bot Telegram delle notifiche di rilascio. Long-poll ~25s, bandwidth quasi nulla in idle.</p>
+        </div>
+    </div>
+</section>
+
+<!-- ════════════════════════════════════════════════════════════════════ -->
 <!-- TELEGRAM NOTIFICATIONS (NEW)                                        -->
 <!-- ════════════════════════════════════════════════════════════════════ -->
 <section class="section" id="telegram" style="background: radial-gradient(ellipse at 30% 60%, rgba(79,172,254,0.05) 0%, transparent 60%);">
@@ -533,6 +587,7 @@ body.lang-it div[data-lang="it"], body.lang-it p[data-lang="it"], body.lang-it l
         <tr><td data-lang="en">Conflict warnings</td><td data-lang="it">Avvisi conflitto</td><td class="cross">&times;</td><td class="check">&check; Real-time</td></tr>
         <tr><td data-lang="en">File sync to Git</td><td data-lang="it">Sync file nel repo Git</td><td class="cross">&times;</td><td class="check">&check; Visual dashboard</td></tr>
         <tr><td data-lang="en"><strong>AI recap of teammate's commits</strong></td><td data-lang="it"><strong>Recap AI dei commit dei colleghi</strong></td><td class="cross">&times;</td><td class="check">&check; Grouped by area</td></tr>
+        <tr><td data-lang="en"><strong>Team chat with clickable file:line anchors</strong></td><td data-lang="it"><strong>Chat team con ancore file:line cliccabili</strong></td><td class="cross">&times;</td><td class="check">&check; Snippet + change detection</td></tr>
         <tr><td data-lang="en"><strong>Telegram alerts on release</strong></td><td data-lang="it"><strong>Alert Telegram al rilascio</strong></td><td class="cross">&times;</td><td class="check">&check; Bot to team</td></tr>
         <tr><td data-lang="en"><strong>AI coding companion</strong></td><td data-lang="it"><strong>AI companion di coding</strong></td><td class="cross">&times;</td><td class="check">&check; VibeBuddy (Haiku)</td></tr>
         <tr><td data-lang="en">Multilingual UI</td><td data-lang="it">UI multilingua</td><td class="cross">&times;</td><td class="check">&check; EN / IT</td></tr>

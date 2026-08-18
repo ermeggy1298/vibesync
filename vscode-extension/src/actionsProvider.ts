@@ -48,6 +48,7 @@ export class ActionsProvider implements vscode.TreeDataProvider<ActionItem> {
                 new ActionItem(t('actions.fetchGithub'), 'cloud-download', 'vibesync.fetchNow'),
                 new ActionItem(t('actions.unlockMyLocks'), 'unlock', 'vibesync.unlockMyFiles'),
                 new ActionItem('Recap AI (commit di un dev)', 'sparkle', 'vibesync.showRecap'),
+                new ActionItem('Chat team', 'comment-discussion', 'vibesync.openChat'),
             );
         }
 

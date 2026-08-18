@@ -12,6 +12,7 @@ import * as os from 'os';
 import * as lockManager from './lockManager';
 import { notifyRelease } from './notificationsTelegram';
 import { ignorePathsFor } from './fileWatcher';
+import { sendChatMessage, Anchor } from './chatTelegram';
 import { t, getWebviewTranslations } from './i18n';
 
 const CONFIG_PATH = path.join(os.homedir(), '.vibesync', 'config.json');
@@ -130,6 +131,18 @@ export async function showSyncDashboard(): Promise<void> {
                     const detail = notif.failed.map(f => `${f.name}: ${f.error}`).join('; ');
                     vscode.window.showWarningMessage(`VibeSync: notifica Telegram fallita per ${notif.failed.length} dev — ${detail}`);
                 }
+
+                // Auto-anchor su rilascio: manda anche un messaggio chat strutturato
+                // col protocol VSC1 e le ancore, cosi' nel pannello chat i colleghi
+                // vedono la release come card con chip cliccabili (in aggiunta al
+                // toast/messaggio Telegram gia' spedito da notifyRelease).
+                try {
+                    const anchors: Anchor[] = result.copied.slice(0, 20).map(f => ({ file: f, start: 1 }));
+                    const overflow = result.copied.length - anchors.length;
+                    const overflowNote = overflow > 0 ? ` (+${overflow} altri)` : '';
+                    const chatText = `🚀 Rilascio di ${result.copied.length} file${overflowNote}`;
+                    await sendChatMessage(chatText, anchors);
+                } catch { /* best-effort: la chat non deve mai bloccare il flow di rilascio */ }
             }
         } else if (msg.command === 'copyFromGit') {
             const files: string[] = msg.files;
